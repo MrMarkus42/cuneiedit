@@ -1,0 +1,50 @@
+[workspace]
+resolver = "3"
+members = ["crates/pilcrow-core", "crates/pilcrow-editor", "crates/pilcrow-macos", "crates/pilcrow-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+pilcrow-core = { path = "crates/pilcrow-core" }
+pilcrow-editor = { path = "crates/pilcrow-editor" }
+pilcrow-macos = { path = "crates/pilcrow-macos" }
+
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+egui = "0.37"
+encoding_rs = "0.8"
+# RustCrypto hashes for the checksum tools (MD5/SHA-1 only for compatibility, not security).
+md-5 = "0.11"
+# Native macOS menu bar (Tauri project); without GTK, only used on macOS.
+muda = { version = "0.21", default-features = false }
+rfd = "0.17"
+# Linear-time matching, so user-supplied patterns cannot hang the editor.
+regex = "1.12"
+# Without `unicode_lines`, only `\n` breaks lines, matching the normalized buffer.
+ropey = { version = "1.6", default-features = false, features = ["simd"] }
+sha1 = "0.11"
+sha2 = "0.11"
+sys-locale = "0.3"
+# Same version as eframe uses; for running eframe on an own event loop.
+winit = { version = "0.30", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

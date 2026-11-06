@@ -1,0 +1,28 @@
+[package]
+name = "pilcrow-app"
+description = "Pilcrow text editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pilcrow"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+jiff = { version = "0.2.39", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+pilcrow-core.workspace = true
+pilcrow-editor.workspace = true
+rfd.workspace = true
+sys-locale.workspace = true
+winit.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+muda.workspace = true
+pilcrow-macos.workspace = true
+
+[lints]
+workspace = true
