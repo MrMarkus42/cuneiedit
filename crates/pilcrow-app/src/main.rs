@@ -40,7 +40,6 @@ fn main() -> eframe::Result {
     };
 
     // An own event loop, so the macOS file-open handler is installed before it starts.
-    #[cfg_attr(not(target_os = "macos"), expect(unused_mut))]
     let mut builder = EventLoop::<UserEvent>::with_user_event();
     // winit's default menu quits via `terminate:` without a close request, which would skip
     // the unsaved-changes prompt; Pilcrow sets its own menu.
