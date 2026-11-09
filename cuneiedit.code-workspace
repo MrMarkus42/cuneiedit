@@ -1,0 +1,107 @@
+{
+	"folders": [
+		{
+			"name": "CuneiEdit",
+			"path": "."
+		}
+	],
+	"settings": {
+		"rust-analyzer.check.command": "clippy",
+		"rust-analyzer.check.allTargets": true,
+		"[rust]": {
+			"editor.defaultFormatter": "rust-lang.rust-analyzer",
+			"editor.formatOnSave": true,
+			"editor.rulers": [100]
+		},
+		"files.exclude": {
+			"**/target": true
+		},
+		"files.watcherExclude": {
+			"**/target/**": true,
+			"fuzz/corpus/**": true
+		},
+		"search.exclude": {
+			"**/target": true,
+			"fuzz/corpus": true,
+			"fuzz/artifacts": true,
+			"Cargo.lock": true,
+			"fuzz/Cargo.lock": true
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"rust-lang.rust-analyzer",
+			"tamasfe.even-better-toml",
+			"vadimcn.vscode-lldb",
+			"github.vscode-github-actions"
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Run CuneiEdit",
+				"type": "shell",
+				"command": "cargo run -p cuneiedit-app",
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Run CuneiEdit (test profile)",
+				"detail": "Uses a temporary HOME, so the real settings and session stay untouched",
+				"type": "shell",
+				"command": "mkdir -p /tmp/cuneiedit-test-home && HOME=/tmp/cuneiedit-test-home cargo run -p cuneiedit-app",
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Test",
+				"type": "shell",
+				"command": "cargo test",
+				"group": { "kind": "test", "isDefault": true },
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Check all (before committing)",
+				"type": "shell",
+				"command": "cargo fmt --all --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo deny check && cargo audit",
+				"group": { "kind": "build", "isDefault": true },
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Build macOS app and DMG",
+				"type": "shell",
+				"command": "./packaging/macos/build-dmg.sh",
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Fuzz (choose target)",
+				"type": "shell",
+				"command": "cd fuzz && cargo +nightly fuzz run ${input:fuzzTarget} -- -max_total_time=120 -max_len=8192 -timeout=10",
+				"problemMatcher": []
+			}
+		],
+		"inputs": [
+			{
+				"id": "fuzzTarget",
+				"type": "pickString",
+				"description": "Fuzz target",
+				"options": ["open", "highlight", "font", "manifest"],
+				"default": "open"
+			}
+		]
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Debug CuneiEdit (test profile)",
+				"type": "lldb",
+				"request": "launch",
+				"cargo": {
+					"args": ["build", "-p", "cuneiedit-app", "--bin", "cuneiedit"]
+				},
+				"env": { "HOME": "/tmp/cuneiedit-test-home" },
+				"cwd": "${workspaceFolder}"
+			}
+		]
+	}
+}

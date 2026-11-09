@@ -1,0 +1,19 @@
+[package]
+name = "cuneiedit-update"
+description = "Signed updates for CuneiEdit: manifest, verification, download and installation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "cuneiedit-release"
+path = "src/bin/cuneiedit-release.rs"
+
+[dependencies]
+# Ed25519 in pure Rust without dependencies; only verification is used by the app.
+ed25519-compact = { version = "2.6", default-features = false, features = ["std"] }
+sha2.workspace = true
+
+[lints]
+workspace = true

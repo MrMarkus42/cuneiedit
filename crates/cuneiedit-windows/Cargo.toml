@@ -1,0 +1,27 @@
+[package]
+name = "cuneiedit-windows"
+description = "The Windows integrations of CuneiEdit that need Win32 calls: printing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Microsoft's raw Win32 bindings; already used by winit and others.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_Xps",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
+
+# With cuneiedit-macos the only crates allowed to use `unsafe` (Win32 calls); see
+# CONTRIBUTING.md.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"

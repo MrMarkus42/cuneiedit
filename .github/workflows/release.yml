@@ -1,0 +1,129 @@
+name: Release
+
+# Publishes a release for a pushed tag `v<version>`. Every release carries `update.txt`
+# signed with the update key (secret CUNEIEDIT_UPDATE_KEY); without the key the release fails,
+# so no unsigned release can be published this way. Never create releases by hand.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    env:
+      # Developer ID signing and notarization run once the Apple secrets exist; until then
+      # the app is signed ad hoc (with the hardened runtime).
+      HAS_DEVELOPER_ID: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - name: Tag matches the version in Cargo.toml
+        run: test "v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)" = "$GITHUB_REF_NAME"
+      - name: Import the Developer ID certificate
+        if: env.HAS_DEVELOPER_ID == 'true'
+        env:
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$CERTIFICATE_PASSWORD" -t cert -f pkcs12 \
+            -k "$KEYCHAIN" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN"
+          rm "$RUNNER_TEMP/certificate.p12"
+      - name: Build, sign and notarize
+        env:
+          CUNEIEDIT_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./packaging/macos/build-dmg.sh
+      - name: Archive the app for updates
+        run: ditto -c -k --keepParent target/dmg/CuneiEdit.app "target/dmg/CuneiEdit-${GITHUB_REF_NAME#v}-macos-arm64.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos
+          path: |
+            target/dmg/*.dmg
+            target/dmg/*.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - run: cargo build --release --locked -p cuneiedit-app
+      - name: Name the executable
+        shell: bash
+        run: cp target/release/cuneiedit.exe "CuneiEdit-${GITHUB_REF_NAME#v}-windows-x64.exe"
+      - name: ZIP for manual download
+        shell: pwsh
+        run: |
+          $v = $env:GITHUB_REF_NAME.Substring(1)
+          New-Item -ItemType Directory -Path zip/CuneiEdit | Out-Null
+          Copy-Item target/release/cuneiedit.exe zip/CuneiEdit/CuneiEdit.exe
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, README.md zip/CuneiEdit/
+          Compress-Archive -Path zip/CuneiEdit -DestinationPath "CuneiEdit-$v-windows-x64.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows
+          path: |
+            CuneiEdit-*-windows-x64.exe
+            CuneiEdit-*-windows-x64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from the tag message
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/-----BEGIN/,$d' > notes.txt
+          if [ ! -s notes.txt ]; then echo "CuneiEdit ${GITHUB_REF_NAME#v}" > notes.txt; fi
+      - name: Write and sign update.txt
+        env:
+          CUNEIEDIT_UPDATE_KEY: ${{ secrets.CUNEIEDIT_UPDATE_KEY }}
+        run: |
+          V=${GITHUB_REF_NAME#v}
+          cargo run --release --locked -q -p cuneiedit-update --bin cuneiedit-release -- manifest "$V" notes.txt \
+            macos-aarch64 "dist/CuneiEdit-$V-macos-arm64.zip" \
+            windows-x86_64 "dist/CuneiEdit-$V-windows-x64.exe" > dist/update.txt
+          cargo run --release --locked -q -p cuneiedit-update --bin cuneiedit-release -- sign dist/update.txt
+          cat dist/update.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "CuneiEdit ${GITHUB_REF_NAME#v}" --notes-file notes.txt --verify-tag

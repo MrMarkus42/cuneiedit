@@ -1,0 +1,32 @@
+[package]
+name = "cuneiedit-app"
+description = "CuneiEdit text editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "cuneiedit"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+jiff = { version = "0.2.39", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+cuneiedit-core.workspace = true
+cuneiedit-editor.workspace = true
+cuneiedit-update.workspace = true
+rfd.workspace = true
+sys-locale.workspace = true
+winit.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+muda.workspace = true
+cuneiedit-macos.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+cuneiedit-windows.workspace = true
+
+[lints]
+workspace = true
