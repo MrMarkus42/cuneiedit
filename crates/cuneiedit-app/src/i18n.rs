@@ -73,6 +73,7 @@ macro_rules! texts {
 texts! {
     menu_file: "File", "Datei";
     new: "New", "Neu";
+    new_window: "New Window", "Neues Fenster";
     open: "Open…", "Öffnen…";
     reveal_finder: "Show in Finder", "Im Finder zeigen";
     reveal_other: "Show in File Manager", "Im Dateimanager zeigen";
@@ -359,7 +360,7 @@ texts! {
     refresh: "Refresh", "Aktualisieren";
     move_to_other_view: "Move to Other View", "In andere Ansicht verschieben";
     close_other_view: "Close Other View", "Andere Ansicht schließen";
-    move_to_new_instance: "Move to New Window", "In neues Fenster verschieben";
+    move_to_new_window: "Move to New Window", "In neues Fenster verschieben";
     show_symbol: "Show Symbol", "Symbole anzeigen";
     show_whitespace: "Show Space and TAB", "Leerzeichen und Tabs anzeigen";
     show_line_endings: "Show End of Line", "Zeilenenden anzeigen";
@@ -488,7 +489,6 @@ texts! {
     /// `{error}` is the reason.
     #[cfg_attr(not(windows), allow(dead_code))]
     print_failed: "Printing failed: {error}", "Drucken fehlgeschlagen: {error}";
-    new_instance_failed: "No new window could be opened: {error}", "Es konnte kein neues Fenster geöffnet werden: {error}";
     about_text: "A fast and simple text editor.", "Ein schneller und einfacher Texteditor.";
     check_for_updates: "Check for Updates…", "Nach Updates suchen…";
     updates_title: "Updates", "Updates";

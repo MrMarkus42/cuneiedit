@@ -22,33 +22,17 @@ use eframe::UserEvent;
 use eframe::egui::{IconData, ViewportBuilder};
 use winit::event_loop::EventLoop;
 
-/// Size of the window icon in pixels.
-const ICON_SIZE: u32 = 256;
-
 fn main() -> eframe::Result {
     // Started elevated by an update on Windows: replace the executable and exit.
     if let Some(code) = cuneiedit_update::apply_from_args() {
         std::process::exit(code);
     }
     cuneiedit_update::cleanup();
-    let mut separate = false;
-    let files: Vec<PathBuf> = std::env::args_os()
-        .skip(1)
-        .filter(|arg| {
-            let flag = arg == instance::NEW_INSTANCE;
-            separate |= flag;
-            !flag
-        })
-        .map(PathBuf::from)
-        .collect();
-    let listener = if separate {
-        None
-    } else {
-        match instance::start(&files) {
-            instance::Start::Forwarded => return Ok(()),
-            instance::Start::Main(listener) => Some(listener),
-            instance::Start::Alone => None,
-        }
+    let files: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let listener = match instance::start(&files) {
+        instance::Start::Forwarded => return Ok(()),
+        instance::Start::Main(listener) => Some(listener),
+        instance::Start::Alone => None,
     };
 
     let options = eframe::NativeOptions {
@@ -58,9 +42,9 @@ fn main() -> eframe::Result {
             .with_min_inner_size([400.0, 300.0])
             .with_drag_and_drop(true)
             .with_icon(Arc::new(IconData {
-                rgba: app_icon::rgba(ICON_SIZE),
-                width: ICON_SIZE,
-                height: ICON_SIZE,
+                rgba: app_icon::rgba(app::ICON_SIZE),
+                width: app::ICON_SIZE,
+                height: app::ICON_SIZE,
             })),
         ..Default::default()
     };
@@ -83,7 +67,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             let incoming = listener.map(|listener| listener.spawn(cc.egui_ctx.clone()));
-            let app = app::CuneiEditApp::new(&cc.egui_ctx, files, separate, incoming);
+            let app = app::CuneiEditApp::new(&cc.egui_ctx, files, incoming);
             Ok(Box::new(app))
         }),
         &event_loop,

@@ -10,6 +10,7 @@
 //! - `navigation`: file tree and document map
 //! - `dialogs`, `preferences`: modal dialogs
 //! - `compare_view`: side-by-side comparison
+//! - `windows`: several windows in one process
 
 mod command;
 mod compare_view;
@@ -28,16 +29,20 @@ mod run;
 mod tab;
 mod toolbar;
 pub mod update;
+mod windows;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use cuneiedit_core::Document;
 use cuneiedit_core::highlight::{self, UserLanguage};
 use cuneiedit_editor::Palette;
-use eframe::egui::{self, CentralPanel, Frame, Key, Modifiers, Panel, Ui, ViewportCommand};
+use eframe::egui::{
+    self, CentralPanel, Frame, IconData, Key, Modifiers, Panel, Ui, ViewportCommand, ViewportId,
+};
 
 use self::command::{Command, TAB_KEYS};
 use self::dialogs::Dialog;
@@ -58,68 +63,135 @@ const DISK_CHECK_SECONDS: f64 = 2.0;
 const BACKUP_SECONDS: f64 = 10.0;
 const MAX_CLOSED: usize = 20;
 const MAX_CLIPBOARD: usize = 30;
+/// Size of the window icon in pixels.
+pub const ICON_SIZE: u32 = 256;
 
-pub struct CuneiEditApp {
-    tabs: Vec<Tab>,
-    active: usize,
-    next_id: u64,
-    settings: Settings,
-    dialog: Option<Dialog>,
-    find: FindBar,
-    compare: Option<CompareView>,
-    compare_first: Option<u64>,
-    /// Tabs waiting to be closed; unsaved ones are asked about one by one.
-    close_queue: VecDeque<u64>,
-    quitting: bool,
-    allow_close: bool,
-    window_title: String,
-    /// Recently closed files, most recent last.
-    closed: Vec<PathBuf>,
-    results: Option<Results>,
-    show_results: bool,
-    file_search: Option<FileSearch>,
-    files_form: FilesForm,
-    completion: Option<Completion>,
-    editor_focused: bool,
-    macro_events: Vec<egui::Event>,
-    /// Tab whose editor is recording a macro.
-    recording: Option<u64>,
-    /// Time "replace bookmarked lines" asked for the clipboard contents.
-    paste_to_bookmarks: Option<f64>,
-    /// Copied texts, most recent first. Kept in memory only.
-    clipboard: VecDeque<String>,
-    symbols: SymbolCache,
-    always_on_top: bool,
-    fullscreen: bool,
-    last_disk_check: f64,
-    last_backup: f64,
-    keymap: Keymap,
-    saved_macros: Vec<SavedMacro>,
-    user_languages: Vec<UserLanguage>,
-    tree: FileTree,
-    call_tip: Option<CallTip>,
-    /// Only the text is shown, centered, in full screen.
-    distraction_free: bool,
-    /// Only the text is shown, in a window that stays on top.
-    post_it: bool,
-    /// Tab shown in the right view after "move to other view".
-    second_view: Option<u64>,
-    /// Tab last shown in the left view, while the right one is active.
-    left_view: Option<u64>,
-    #[cfg(target_os = "macos")]
-    mac_menu: Option<mac_menu::MacMenu>,
-    updater: update::Updater,
-    /// Started with "move to new instance": no session, no backups.
-    separate: bool,
-    /// Files handed over by later starts.
-    incoming: Option<Receiver<Vec<PathBuf>>>,
+/// Declares `CuneiEditApp` from the state all windows share and the state of one window.
+/// The window being shown keeps its state in `CuneiEditApp` itself; the other windows keep
+/// theirs in `WindowState`s and are swapped in to be shown (see `windows.rs`).
+macro_rules! app_state {
+    (
+        shared { $($(#[$s_meta:meta])* $s:ident: $s_ty:ty,)* }
+        window { $($(#[$w_meta:meta])* $w:ident: $w_ty:ty = $w_init:expr,)* }
+    ) => {
+        pub struct CuneiEditApp {
+            $($(#[$s_meta])* $s: $s_ty,)*
+            $($(#[$w_meta])* $w: $w_ty,)*
+        }
+
+        struct Shared {
+            $($s: $s_ty,)*
+        }
+
+        struct WindowState {
+            $($w: $w_ty,)*
+        }
+
+        impl Default for WindowState {
+            fn default() -> Self {
+                Self { $($w: $w_init,)* }
+            }
+        }
+
+        impl CuneiEditApp {
+            fn assemble(shared: Shared, window: WindowState) -> Self {
+                Self { $($s: shared.$s,)* $($w: window.$w,)* }
+            }
+
+            fn swap_window(&mut self, window: &mut WindowState) {
+                $(std::mem::swap(&mut self.$w, &mut window.$w);)*
+            }
+        }
+    };
 }
+
+app_state! {
+    shared {
+        next_id: u64,
+        settings: Settings,
+        /// Set by "Quit": closing the main window then quits instead of closing the window.
+        quit_requested: bool,
+        /// Asking about unsaved documents in all windows before quitting.
+        app_quitting: bool,
+        allow_close: bool,
+        /// Recently closed files, most recent last.
+        closed: Vec<PathBuf>,
+        macro_events: Vec<egui::Event>,
+        /// Tab whose editor is recording a macro.
+        recording: Option<u64>,
+        /// Copied texts, most recent first. Kept in memory only.
+        clipboard: VecDeque<String>,
+        last_backup: f64,
+        keymap: Keymap,
+        saved_macros: Vec<SavedMacro>,
+        user_languages: Vec<UserLanguage>,
+        #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+        mac_menu: MacMenuState,
+        updater: update::Updater,
+        /// Files handed over by later starts.
+        incoming: Option<Receiver<Vec<PathBuf>>>,
+        /// The windows not being shown right now.
+        windows: Vec<WindowState>,
+        /// Window that had the focus last; files from outside open there.
+        last_focused: ViewportId,
+        next_window: u64,
+        icon: Arc<IconData>,
+    }
+    window {
+        viewport: ViewportId = ViewportId::ROOT,
+        /// Order of the windows in the session; the main window comes first.
+        number: u64 = 0,
+        tabs: Vec<Tab> = Vec::new(),
+        active: usize = 0,
+        dialog: Option<Dialog> = None,
+        find: FindBar = FindBar::default(),
+        compare: Option<CompareView> = None,
+        compare_first: Option<u64> = None,
+        /// Tabs waiting to be closed; unsaved ones are asked about one by one.
+        close_queue: VecDeque<u64> = VecDeque::new(),
+        /// Asking about this window's unsaved documents before quitting.
+        quitting: bool = false,
+        /// Closing this window: its tabs are closed one by one.
+        closing: bool = false,
+        /// All tabs are closed; the window goes away.
+        closed_window: bool = false,
+        /// Bring this window to the front.
+        raise: bool = false,
+        window_title: String = String::new(),
+        results: Option<Results> = None,
+        show_results: bool = false,
+        file_search: Option<FileSearch> = None,
+        files_form: FilesForm = FilesForm::default(),
+        completion: Option<Completion> = None,
+        editor_focused: bool = false,
+        /// Time "replace bookmarked lines" asked for the clipboard contents.
+        paste_to_bookmarks: Option<f64> = None,
+        symbols: SymbolCache = SymbolCache::default(),
+        always_on_top: bool = false,
+        fullscreen: bool = false,
+        last_disk_check: f64 = 0.0,
+        tree: FileTree = FileTree::default(),
+        call_tip: Option<CallTip> = None,
+        /// Only the text is shown, centered, in full screen.
+        distraction_free: bool = false,
+        /// Only the text is shown, in a window that stays on top.
+        post_it: bool = false,
+        /// Tab shown in the right view after "move to other view".
+        second_view: Option<u64> = None,
+        /// Tab last shown in the left view, while the right one is active.
+        left_view: Option<u64> = None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+type MacMenuState = Option<mac_menu::MacMenu>;
+#[cfg(not(target_os = "macos"))]
+type MacMenuState = ();
 
 impl CuneiEditApp {
     pub fn new(
         ctx: &egui::Context,
         files: Vec<PathBuf>,
-        separate: bool,
         incoming: Option<Receiver<Vec<PathBuf>>>,
     ) -> Self {
         let settings = Settings::load();
@@ -130,53 +202,34 @@ impl CuneiEditApp {
         highlight::set_user_languages(&user_languages);
         let font_error = files::apply_font(ctx, settings.font_path.as_deref()).err();
 
-        let mut app = Self {
-            tabs: Vec::new(),
-            active: 0,
+        let shared = Shared {
             next_id: 0,
             keymap: Keymap::new(&settings.shortcuts),
             settings,
-            dialog: None,
-            find: FindBar::default(),
-            compare: None,
-            compare_first: None,
-            close_queue: VecDeque::new(),
-            quitting: false,
+            quit_requested: false,
+            app_quitting: false,
             allow_close: false,
-            window_title: String::new(),
             closed: Vec::new(),
-            results: None,
-            show_results: false,
-            file_search: None,
-            files_form: FilesForm::default(),
-            completion: None,
-            editor_focused: false,
             macro_events: Vec::new(),
             recording: None,
-            paste_to_bookmarks: None,
             clipboard: VecDeque::new(),
-            symbols: SymbolCache::default(),
-            always_on_top: false,
-            fullscreen: false,
-            last_disk_check: 0.0,
             last_backup: 0.0,
             saved_macros: macros::load(),
             user_languages,
-            tree: FileTree::default(),
-            call_tip: None,
-            distraction_free: false,
-            post_it: false,
-            second_view: None,
-            left_view: None,
-            #[cfg(target_os = "macos")]
-            mac_menu: None,
+            mac_menu: MacMenuState::default(),
             updater: update::Updater::default(),
-            separate,
             incoming,
+            windows: Vec::new(),
+            last_focused: ViewportId::ROOT,
+            next_window: 1,
+            icon: Arc::new(IconData {
+                rgba: crate::app_icon::rgba(ICON_SIZE),
+                width: ICON_SIZE,
+                height: ICON_SIZE,
+            }),
         };
-        if !separate {
-            app.restore_session();
-        }
+        let mut app = Self::assemble(shared, WindowState::default());
+        app.restore_session();
         if app.tabs.is_empty() {
             app.new_tab();
         }
@@ -246,6 +299,21 @@ impl CuneiEditApp {
     }
 
     fn remove_tab(&mut self, index: usize) {
+        let tab = self.detach_tab(index);
+        if self.recording == Some(tab.id) {
+            self.recording = None;
+        }
+        if let Some(path) = tab.doc.path() {
+            self.closed.retain(|closed| closed != path);
+            self.closed.push(path.to_path_buf());
+            if self.closed.len() > MAX_CLOSED {
+                self.closed.remove(0);
+            }
+        }
+    }
+
+    /// Takes a tab out of this window, keeping at least one tab open.
+    fn detach_tab(&mut self, index: usize) -> Tab {
         let tab = self.tabs.remove(index);
         if self
             .compare
@@ -256,9 +324,6 @@ impl CuneiEditApp {
         }
         if self.compare_first == Some(tab.id) {
             self.compare_first = None;
-        }
-        if self.recording == Some(tab.id) {
-            self.recording = None;
         }
         if self.completion.as_ref().is_some_and(|c| c.tab == tab.id) {
             self.completion = None;
@@ -272,16 +337,9 @@ impl CuneiEditApp {
         if self.left_view == Some(tab.id) {
             self.left_view = None;
         }
-        if let Some(path) = tab.doc.path() {
-            self.closed.retain(|closed| closed != path);
-            self.closed.push(path.to_path_buf());
-            if self.closed.len() > MAX_CLOSED {
-                self.closed.remove(0);
-            }
-        }
         if self.tabs.is_empty() {
             self.new_tab();
-            return;
+            return tab;
         }
         let active = if self.active > index || self.active >= self.tabs.len() {
             self.active.saturating_sub(1)
@@ -289,6 +347,7 @@ impl CuneiEditApp {
             self.active
         };
         self.activate(active);
+        tab
     }
 
     fn shortcut_command(&self, ctx: &egui::Context) -> Option<Command> {
@@ -333,8 +392,11 @@ impl CuneiEditApp {
 
     fn handle_window(&mut self, ctx: &egui::Context) {
         self.fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
-            self.request_quit(ctx);
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.close_requested(ctx);
+        }
+        if self.quitting && self.dialog.is_none() {
+            self.process_close_queue(ctx);
         }
 
         let dropped: Vec<PathBuf> = ctx.input(|i| {
@@ -348,15 +410,20 @@ impl CuneiEditApp {
             self.open_path(&path);
         }
 
-        let handed_over: Vec<Vec<PathBuf>> = self
-            .incoming
-            .as_ref()
-            .map(|incoming| incoming.try_iter().collect())
-            .unwrap_or_default();
-        if !handed_over.is_empty() {
-            for path in handed_over.into_iter().flatten() {
-                self.open_path(&path);
+        if self.viewport == self.last_focused {
+            let handed_over: Vec<Vec<PathBuf>> = self
+                .incoming
+                .as_ref()
+                .map(|incoming| incoming.try_iter().collect())
+                .unwrap_or_default();
+            if !handed_over.is_empty() {
+                for path in handed_over.into_iter().flatten() {
+                    self.open_path(&path);
+                }
+                self.raise = true;
             }
+        }
+        if std::mem::take(&mut self.raise) {
             ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
         }
@@ -376,7 +443,7 @@ impl CuneiEditApp {
             self.last_disk_check = now;
             self.check_disk();
         }
-        if now - self.last_backup >= BACKUP_SECONDS {
+        if self.viewport == ViewportId::ROOT && now - self.last_backup >= BACKUP_SECONDS {
             self.last_backup = now;
             self.backup_if_needed();
         }
@@ -433,17 +500,28 @@ fn lowest_free_number(used: impl Iterator<Item = usize>) -> usize {
 
 impl eframe::App for CuneiEditApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        self.all_windows_ui(ui);
+    }
+}
+
+impl CuneiEditApp {
+    /// One frame of the window whose state is in `self`.
+    fn window_ui(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
         self.handle_window(&ctx);
         self.background_work(&ctx, now);
-        self.update_tick(&ctx);
+        if self.viewport == ViewportId::ROOT {
+            self.update_tick(&ctx);
+        }
         let texts = self.settings.language.texts();
 
         let mut commands = Vec::new();
         commands.extend(self.shortcut_command(&ctx));
         #[cfg(target_os = "macos")]
-        self.mac_menu_frame(&ctx, &mut commands);
+        if self.viewport == self.last_focused {
+            self.mac_menu_frame(&ctx, &mut commands);
+        }
         self.completion_keys(&ctx);
         self.paste_into_bookmarks(&ctx, now);
         let chrome = !self.distraction_free && !self.post_it;

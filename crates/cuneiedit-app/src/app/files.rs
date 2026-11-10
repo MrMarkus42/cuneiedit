@@ -11,12 +11,12 @@ use cuneiedit_core::font::TrueType;
 use cuneiedit_core::highlight::{Language as Syntax, TokenKind};
 use cuneiedit_core::{DiskStatus, Document, Encoding, SaveError};
 use cuneiedit_editor::Palette;
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily, ViewportCommand};
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily, ViewportCommand, ViewportId};
 
 use super::CuneiEditApp;
 use super::dialogs::{Dialog, UnsavedChoice};
+use super::tab::Tab;
 use crate::i18n::{Texts, fill};
-use crate::instance::NEW_INSTANCE;
 use crate::session::{self, Session, SessionTab};
 use crate::settings::{Flag, SaveBackup, config_file};
 use crate::system;
@@ -98,11 +98,11 @@ fn text_fonts(ctx: &egui::Context) -> Vec<TrueType> {
 }
 
 impl CuneiEditApp {
-    /// Reopens the tabs of the last run, with unsaved text from backups.
+    /// Reopens the tabs and windows of the last run, with unsaved text from backups.
     pub(super) fn restore_session(&mut self) {
         let session = Session::load();
-        let mut active = None;
-        for (index, saved) in session.tabs.iter().enumerate() {
+        let mut windows: Vec<(Vec<Tab>, Option<usize>)> = Vec::new();
+        for saved in &session.tabs {
             // Files that no longer exist are skipped silently.
             let Some(doc) = restore_document(saved) else {
                 continue;
@@ -112,8 +112,8 @@ impl CuneiEditApp {
             } else {
                 0
             };
-            let tab_index = self.push_tab(doc, number);
-            let tab = &mut self.tabs[tab_index];
+            self.next_id += 1;
+            let mut tab = Tab::new(self.next_id, doc, number);
             if let Some(syntax) = saved.syntax.as_deref().and_then(Syntax::from_name) {
                 tab.highlighter.set_language(syntax);
             }
@@ -125,12 +125,22 @@ impl CuneiEditApp {
             tab.read_only = saved.read_only;
             tab.pinned = saved.pinned;
             tab.color = saved.color;
-            if index == session.active {
-                active = Some(tab_index);
+            if windows.len() <= saved.window {
+                windows.resize_with(saved.window + 1, Default::default);
             }
+            let (tabs, active) = &mut windows[saved.window];
+            if saved.active {
+                *active = Some(tabs.len());
+            }
+            tabs.push(tab);
         }
-        if let Some(active) = active {
-            self.activate(active);
+        let mut windows = windows.into_iter().filter(|(tabs, _)| !tabs.is_empty());
+        if let Some((tabs, active)) = windows.next() {
+            self.tabs = tabs;
+            self.activate(active.unwrap_or(0));
+        }
+        for (tabs, active) in windows {
+            self.open_window(tabs, active.unwrap_or(0));
         }
     }
 
@@ -174,6 +184,9 @@ impl CuneiEditApp {
             .position(|tab| tab.doc.path() == Some(&path))
         {
             self.activate(index);
+            return Ok(());
+        }
+        if self.show_in_other_window(&path) {
             return Ok(());
         }
         let doc = Document::open(&path)?;
@@ -409,7 +422,7 @@ impl CuneiEditApp {
         self.process_close_queue(ctx);
     }
 
-    fn process_close_queue(&mut self, ctx: &egui::Context) {
+    pub(super) fn process_close_queue(&mut self, ctx: &egui::Context) {
         while let Some(&id) = self.close_queue.front() {
             let Some(index) = self.tab_index(id) else {
                 self.close_queue.pop_front();
@@ -425,10 +438,12 @@ impl CuneiEditApp {
                 self.remove_tab(index);
             }
         }
-        if self.quitting {
-            self.allow_close = true;
-            ctx.send_viewport_cmd(ViewportCommand::Close);
+        // Done with this window; the program quits once all windows are done.
+        self.quitting = false;
+        if std::mem::take(&mut self.closing) {
+            self.closed_window = true;
         }
+        ctx.request_repaint_of(ViewportId::ROOT);
     }
 
     pub(super) fn resolve_unsaved(&mut self, ctx: &egui::Context, id: u64, choice: UnsavedChoice) {
@@ -439,15 +454,12 @@ impl CuneiEditApp {
         };
         match choice {
             UnsavedChoice::Cancel => {
-                self.close_queue.clear();
-                self.quitting = false;
-                super::update::cancel_relaunch();
+                self.cancel_closing();
                 return;
             }
             UnsavedChoice::Save if !self.save(index) => {
                 // Saving failed or was cancelled; the error dialog explains why.
-                self.close_queue.clear();
-                self.quitting = false;
+                self.cancel_closing();
                 return;
             }
             UnsavedChoice::Save | UnsavedChoice::Discard => {
@@ -460,66 +472,74 @@ impl CuneiEditApp {
         self.process_close_queue(ctx);
     }
 
-    /// Handles a close request of the window: remembers the session and either quits
-    /// right away (unsaved text is in backups) or asks about each unsaved document.
+    /// Handles quitting: remembers the session and either quits right away (unsaved text is
+    /// in backups) or asks about each unsaved document, in every window.
     pub(super) fn request_quit(&mut self, ctx: &egui::Context) {
         let backed_up = self.save_session_state();
-        if backed_up || !self.tabs.iter().any(|tab| tab.doc.is_modified()) {
+        let unsaved = self
+            .tabs
+            .iter()
+            .chain(self.windows.iter().flat_map(|window| &window.tabs))
+            .any(|tab| tab.doc.is_modified());
+        if backed_up || !unsaved {
             return;
         }
         ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-        if self.dialog.is_none() && !self.quitting {
-            self.quitting = true;
-            self.close_queue = self.tabs.iter().map(|tab| tab.id).collect();
-            self.process_close_queue(ctx);
+        if !self.app_quitting && !self.ask_all_windows() {
+            self.quit_requested = false;
         }
+        ctx.request_repaint();
     }
 
-    /// Writes `session.ini` and backups of unsaved documents. Returns whether every
-    /// unsaved document is in a backup. A separate instance leaves both alone.
+    /// Writes `session.ini` and backups of unsaved documents of all windows. Returns whether
+    /// every unsaved document is in a backup.
     pub(super) fn save_session_state(&mut self) -> bool {
-        if self.separate {
-            return false;
-        }
         let backup = self.settings.get(Flag::Backup);
         let mut session = Session::default();
         let mut complete = backup;
         let mut keep = Vec::new();
-        for (index, tab) in self.tabs.iter_mut().enumerate() {
-            if tab.is_pristine() {
-                continue;
-            }
-            let mut saved = SessionTab {
-                path: tab.doc.path().map(Path::to_path_buf),
-                encoding: Some(tab.doc.encoding()),
-                line_ending: Some(tab.doc.line_ending()),
-                syntax: Some(tab.syntax().name().to_owned()),
-                untitled: tab.untitled_number,
-                cursor: tab.editor.cursor(),
-                bookmarks: tab.editor.bookmarks().iter().copied().collect(),
-                read_only: tab.read_only,
-                pinned: tab.pinned,
-                color: tab.color,
-                backup: None,
-            };
-            if backup && tab.doc.is_modified() {
-                let name = session::backup_name(tab.id);
-                let current = tab.backed_up == Some(tab.doc.revision());
-                if current || session::write_backup(&name, &tab.doc.text().to_string()).is_ok() {
-                    tab.backed_up = Some(tab.doc.revision());
-                    saved.backup = Some(name.clone());
-                    keep.push(name);
-                } else {
-                    complete = false;
+        let mut window = 0;
+        for (active, tabs) in self.all_tabs_mut() {
+            let before = session.tabs.len();
+            for (index, tab) in tabs.iter_mut().enumerate() {
+                if tab.is_pristine() {
+                    continue;
                 }
+                let mut saved = SessionTab {
+                    path: tab.doc.path().map(Path::to_path_buf),
+                    encoding: Some(tab.doc.encoding()),
+                    line_ending: Some(tab.doc.line_ending()),
+                    syntax: Some(tab.syntax().name().to_owned()),
+                    untitled: tab.untitled_number,
+                    cursor: tab.editor.cursor(),
+                    bookmarks: tab.editor.bookmarks().iter().copied().collect(),
+                    read_only: tab.read_only,
+                    pinned: tab.pinned,
+                    color: tab.color,
+                    backup: None,
+                    window,
+                    active: index == active,
+                };
+                if backup && tab.doc.is_modified() {
+                    let name = session::backup_name(tab.id);
+                    let current = tab.backed_up == Some(tab.doc.revision());
+                    if current || session::write_backup(&name, &tab.doc.text().to_string()).is_ok()
+                    {
+                        tab.backed_up = Some(tab.doc.revision());
+                        saved.backup = Some(name.clone());
+                        keep.push(name);
+                    } else {
+                        complete = false;
+                    }
+                }
+                if saved.path.is_none() && saved.backup.is_none() {
+                    continue;
+                }
+                session.tabs.push(saved);
             }
-            if saved.path.is_none() && saved.backup.is_none() {
-                continue;
+            if session.tabs.len() > before {
+                window += 1;
             }
-            if index == self.active {
-                session.active = session.tabs.len();
-            }
-            session.tabs.push(saved);
         }
         if session.save().is_err() {
             complete = false;
@@ -533,8 +553,9 @@ impl CuneiEditApp {
         let outdated = self
             .tabs
             .iter()
+            .chain(self.windows.iter().flat_map(|window| &window.tabs))
             .any(|tab| tab.doc.is_modified() && tab.backed_up != Some(tab.doc.revision()));
-        if self.settings.get(Flag::Backup) && outdated && !self.separate {
+        if self.settings.get(Flag::Backup) && outdated {
             self.save_session_state();
         }
     }
@@ -583,38 +604,6 @@ impl CuneiEditApp {
                 &[("name", &name), ("error", &err.to_string())],
             );
             self.error(message);
-        }
-    }
-
-    /// Opens the active tab's file in a separate instance and closes the tab. Only saved
-    /// files can move, so nothing is lost on the way.
-    pub(super) fn move_to_new_instance(&mut self) {
-        let tab = &self.tabs[self.active];
-        let Some(path) = tab.doc.path().map(Path::to_path_buf) else {
-            return;
-        };
-        if tab.doc.is_modified() {
-            return;
-        }
-        let started = std::env::current_exe().and_then(|exe| {
-            std::process::Command::new(exe)
-                .arg(NEW_INSTANCE)
-                .arg(&path)
-                .spawn()
-        });
-        match started {
-            Ok(mut child) => {
-                // Collects the exit status, so no zombie process is left behind.
-                std::thread::spawn(move || child.wait());
-                self.remove_tab(self.active);
-            }
-            Err(err) => {
-                let message = fill(
-                    self.texts().new_instance_failed,
-                    &[("error", &err.to_string())],
-                );
-                self.error(message);
-            }
         }
     }
 

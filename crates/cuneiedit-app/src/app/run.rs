@@ -67,6 +67,7 @@ impl CuneiEditApp {
         let id = self.tabs[self.active].id;
         match command {
             Command::New => self.new_tab(),
+            Command::NewWindow => self.open_window(Vec::new(), 0),
             Command::Open => self.open_dialog(),
             Command::OpenRecent(index) => {
                 if let Some(path) = self.settings.recent.get(index).cloned() {
@@ -170,7 +171,7 @@ impl CuneiEditApp {
                 self.export(ctx, command == Command::ExportPdf);
             }
             Command::Print => self.print(ctx),
-            Command::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
+            Command::Quit => self.quit(ctx),
             Command::Activate(index) => self.activate(index),
             Command::NextTab | Command::PreviousTab => {
                 let len = self.tabs.len();
@@ -207,7 +208,7 @@ impl CuneiEditApp {
                 }
             }
             Command::CloseOtherView => self.second_view = None,
-            Command::MoveToNewInstance => self.move_to_new_instance(),
+            Command::MoveToNewWindow => self.move_to_new_window(),
             Command::DistractionFree => {
                 self.distraction_free ^= true;
                 self.post_it = false;

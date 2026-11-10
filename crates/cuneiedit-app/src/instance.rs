@@ -16,9 +16,6 @@ const MAX_MESSAGE: usize = 1 << 20;
 const MAX_FILES: usize = 1000;
 const HEADER: &[u8] = b"cuneiedit-open-1\n";
 
-/// Starts a separate instance that neither hands over its files nor receives any.
-pub const NEW_INSTANCE: &str = "--new-instance";
-
 /// How this process starts.
 pub enum Start {
     /// The files went to the running instance; this one can exit.
@@ -72,6 +69,18 @@ enum Sent {
     Delivered,
     NoInstance,
     Failed,
+}
+
+/// Name of the channel; runs with another settings folder (e.g. tests) get their own.
+fn channel_name() -> String {
+    let folder = crate::settings::config_file("").unwrap_or_default();
+    // FNV-1a, to keep the name short.
+    let hash = platform::path_bytes(&folder)
+        .iter()
+        .fold(0xcbf2_9ce4_8422_2325u64, |hash, &byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        });
+    format!("CuneiEdit-{hash:016x}")
 }
 
 fn encode(files: &[PathBuf]) -> Option<Vec<u8>> {
@@ -129,9 +138,16 @@ mod platform {
 
     pub type Listener = UnixListener;
 
-    /// The socket, in a folder only the user can enter.
+    /// The socket, in a folder only the user can enter: on Linux the runtime folder of the
+    /// login session if there is one, otherwise next to the settings.
     fn socket() -> Option<PathBuf> {
-        Some(config_file("instance")?.join("socket"))
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .filter(|dir| cfg!(not(target_os = "macos")) && dir.is_absolute());
+        match runtime {
+            Some(dir) => Some(dir.join("cuneiedit").join(super::channel_name())),
+            None => Some(config_file("instance")?.join("socket")),
+        }
     }
 
     pub fn send(message: &[u8]) -> Sent {
@@ -212,21 +228,11 @@ mod platform {
     use cuneiedit_windows::instance::{self, Server};
 
     use super::{MAX_MESSAGE, Sent};
-    use crate::settings::config_file;
 
     pub type Listener = Server;
 
-    /// The pipe name; test runs with another settings folder get their own.
     fn name() -> String {
-        let folder = config_file("").unwrap_or_default();
-        // FNV-1a, to keep the name short.
-        let hash = folder
-            .as_os_str()
-            .encode_wide()
-            .fold(0xcbf2_9ce4_8422_2325u64, |hash, unit| {
-                (hash ^ u64::from(unit)).wrapping_mul(0x0100_0000_01b3)
-            });
-        format!("CuneiEdit-{hash:016x}")
+        super::channel_name()
     }
 
     pub fn send(message: &[u8]) -> Sent {

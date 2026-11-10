@@ -43,9 +43,9 @@ writing; the icon shows three of them.
 ## Features
 
 **Files and sessions**
-- Tabs: pin, color, reorder by dragging, many ways to close, reopen closed tabs, move a tab to
-  a new window
-- Files opened from Explorer, Finder or the command line go to the running window
+- Tabs: pin, color, reorder by dragging, many ways to close, reopen closed tabs
+- Several windows; files opened from Explorer, Finder or the command line go to the last used
+  window
 - Open, save, save all, save a copy, rename, reload, move to trash, show in Finder/Explorer
 - Restores the last session **including unsaved changes**; named session files
 - Notices files changed or deleted by other programs; follow mode (`tail -f`)

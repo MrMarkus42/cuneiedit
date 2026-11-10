@@ -12,6 +12,7 @@ use cuneiedit_core::{Encoding, LineEnding};
 use crate::settings::{config_file, safe_path, write_atomically};
 
 const MAX_TABS: usize = 500;
+const MAX_WINDOWS: usize = 50;
 const BACKUP_DIR: &str = "backup";
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -28,12 +29,15 @@ pub struct SessionTab {
     pub read_only: bool,
     pub pinned: bool,
     pub color: Option<usize>,
+    /// Window the tab is in, counted from 0 (the main window).
+    pub window: usize,
+    /// The tab shown in its window.
+    pub active: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Session {
     pub tabs: Vec<SessionTab>,
-    pub active: usize,
 }
 
 impl Session {
@@ -70,13 +74,14 @@ impl Session {
                     ..SessionTab::default()
                 })
                 .collect(),
-            active: 0,
         };
         write_atomically(path, &session.serialize())
     }
 
     pub fn parse(text: &str) -> Self {
         let mut session = Self::default();
+        // Written before windows existed: the index of the active tab.
+        let mut old_active = None;
         for line in text.lines() {
             if line == "[tab]" {
                 if session.tabs.len() >= MAX_TABS {
@@ -88,11 +93,10 @@ impl Session {
             let Some((key, value)) = line.split_once('=') else {
                 continue;
             };
-            if key == "active" {
-                session.active = value.parse().unwrap_or(0);
-                continue;
-            }
             let Some(tab) = session.tabs.last_mut() else {
+                if key == "active" {
+                    old_active = value.parse::<usize>().ok();
+                }
                 continue;
             };
             match key {
@@ -115,14 +119,21 @@ impl Session {
                 "read_only" => tab.read_only = value == "true",
                 "pinned" => tab.pinned = value == "true",
                 "color" => tab.color = value.parse().ok().filter(|&c: &usize| c < 5),
+                "window" => {
+                    tab.window = value.parse().ok().filter(|&w| w < MAX_WINDOWS).unwrap_or(0);
+                }
+                "active" => tab.active = value == "true",
                 _ => {}
             }
+        }
+        if let Some(tab) = old_active.and_then(|index| session.tabs.get_mut(index)) {
+            tab.active = true;
         }
         session
     }
 
     pub fn serialize(&self) -> String {
-        let mut out = format!("active={}\n", self.active);
+        let mut out = String::new();
         for tab in &self.tabs {
             out.push_str("[tab]\n");
             if let Some(path) = tab.path.as_deref().and_then(safe_path) {
@@ -158,6 +169,12 @@ impl Session {
             }
             if let Some(color) = tab.color {
                 out.push_str(&format!("color={color}\n"));
+            }
+            if tab.window > 0 {
+                out.push_str(&format!("window={}\n", tab.window));
+            }
+            if tab.active {
+                out.push_str("active=true\n");
             }
         }
         out
@@ -252,12 +269,21 @@ mod tests {
                     untitled: 3,
                     encoding: Some(Encoding::Utf16Le),
                     line_ending: Some(LineEnding::CrLf),
+                    window: 1,
+                    active: true,
                     ..SessionTab::default()
                 },
             ],
-            active: 1,
         };
         assert_eq!(Session::parse(&session.serialize()), session);
+    }
+
+    #[test]
+    fn reads_sessions_from_before_windows() {
+        let parsed = Session::parse("active=1\n[tab]\npath=/a\n[tab]\npath=/b\nwindow=99");
+        assert!(!parsed.tabs[0].active);
+        assert!(parsed.tabs[1].active);
+        assert_eq!(parsed.tabs[1].window, 0, "too many windows");
     }
 
     #[test]

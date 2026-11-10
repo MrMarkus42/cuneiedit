@@ -81,13 +81,12 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
   itself and re-checks the hash. Linux only shows the release page.
   Approved exception (2026-11-10, `instance.rs`): single instance. A second start hands its
   file paths to the running instance and exits; nothing else is accepted. The channel is
-  local only and limited to the user: a Unix domain socket in `instance/` (mode 0700) in the
-  config directory, or on Windows a named pipe whose access list allows only the user's SID,
-  that rejects remote clients and whose server process the client checks to run as the same
-  user. Messages are limited to 1 MB and 1000 absolute paths and parsed defensively (tested);
-  the paths are opened like files dropped on the window. "Move to New Window" starts the own
-  executable (`current_exe`) with `--new-instance` and the path, no shell; such an instance
-  neither receives files nor reads or writes the session and backups.
+  local only and limited to the user: a Unix domain socket in a folder with mode 0700 (Linux:
+  `$XDG_RUNTIME_DIR/cuneiedit/`, otherwise `instance/` in the config directory), or on
+  Windows a named pipe whose access list allows only the user's SID, that rejects remote
+  clients and whose server process the client checks to run as the same user. Messages are
+  limited to 1 MB and 1000 absolute paths and parsed defensively (tested); the paths are
+  opened like files dropped on the window.
 - Before adding a dependency, check: maintenance and popularity, license, `unsafe` usage,
   `build.rs` and proc macros (they run at build time). Prefer the standard library or a few
   lines of own code over small crates.
@@ -213,10 +212,14 @@ git tag -a v0.3.0 -m "Release notes" && git push origin v0.3.0   # signed releas
   and the second view are not restored with the session.
 - With several cursors, each keystroke is its own undo step; auto-close is off.
 - User languages are leaked once per definition (a few KB) to keep specs `'static`.
-- A separate instance ("Move to New Window") shares `settings.ini` with the main one; the
-  last one to save its settings wins. Its unsaved documents are asked about on quit.
+- Windows: all in one process (`app/windows.rs`). The main window is eframe's root
+  viewport, the others are immediate viewports; per-window state is declared in the
+  `app_state!` macro in `app/mod.rs` and swapped into `CuneiEditApp` while a window is shown,
+  so all code works on "the current window". Closing the main window while others are open
+  moves the first other window into it. Window positions are not saved in the session, and
+  tabs cannot be dragged between windows ("Move to New Window" only).
 - The Windows `.exe` icon resource and the named pipe were only checked by building for
-  Windows; the single instance was tested on macOS.
+  Windows; the single instance and the windows were tested on macOS.
 - Not notarized yet (needs the Apple Developer Program and the secrets above): Gatekeeper warns
   on the first start. Settings and session files (`cuneiedit-app`) are not fuzzed yet.
 
@@ -264,7 +267,8 @@ large-file performance, signed updates, fuzzing, hardened runtime. CI is green o
 Windows and Linux. Earlier releases were removed; there is no update path from them.
 Private vulnerability reporting is enabled on GitHub; `SECURITY.md` describes it.
 Since 0.3.0 (not released yet): Windows `.exe` icon, single instance (files from Explorer,
-Finder or the command line go to the running window) and "Move to New Window" for tabs.
+Finder or the command line go to the running process), several windows ("New Window",
+"Move to New Window"; restored with the session).
 
 **Next steps, in order:**
 
@@ -272,8 +276,8 @@ Finder or the command line go to the running window) and "Move to New Window" fo
    standard user, and in `~/Applications`) and on a real Windows PC (user folder and
    `C:\Program Files` with UAC). Also try CuneiEdit on Windows in general (typing, saving,
    printing with the new print dialog on a real printer) and check the `.exe` icon in
-   Explorer and the taskbar, double clicks on files while CuneiEdit runs, and "Move to New
-   Window".
+   Explorer and the taskbar, double clicks on files while CuneiEdit runs, and several
+   windows (new window, move a tab, close the main window, quit with unsaved documents).
 2. Look at the things never checked visually: print dialogs, new highlighting colors, update
    dialog and first-start question.
 3. Check the trademark before announcing CuneiEdit widely.

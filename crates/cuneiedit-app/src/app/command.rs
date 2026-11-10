@@ -59,6 +59,7 @@ pub enum DateStyle {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Command {
     New,
+    NewWindow,
     Open,
     OpenRecent(usize),
     OpenAllRecent,
@@ -160,8 +161,8 @@ pub enum Command {
     SetTabColor(Option<usize>),
     MoveToOtherView,
     CloseOtherView,
-    /// Opens the saved file of the tab in a separate instance and closes the tab.
-    MoveToNewInstance,
+    /// Moves the tab into a new window.
+    MoveToNewWindow,
     FoldAll,
     UnfoldAll,
     FoldCurrent,
@@ -253,6 +254,7 @@ pub const SHORTCUTS: &[(KeyboardShortcut, Command)] = &[
     (key(CMD_SHIFT, Key::S), Command::SaveAs),
     (key(CMD_SHIFT, Key::W), Command::CloseAll),
     (key(CMD_SHIFT, Key::T), Command::RestoreClosed),
+    (key(CMD_SHIFT, Key::N), Command::NewWindow),
     (key(CMD_SHIFT, Key::G), Command::FindPrevious),
     (key(CMD_SHIFT, Key::F), Command::FindInFiles),
     (key(CMD_SHIFT, Key::F3), Command::SelectFindPrevious),
@@ -370,7 +372,7 @@ pub const CUSTOMIZABLE: &[Command] = &[
     Command::HideLines,
     Command::ToggleSplit,
     Command::MoveToOtherView,
-    Command::MoveToNewInstance,
+    Command::MoveToNewWindow,
     Command::Summary,
     Command::SetCompareFirst,
     Command::CompareWithSaved,
@@ -440,6 +442,7 @@ impl Command {
     pub fn label(self, t: &Texts) -> Cow<'static, str> {
         let text: &'static str = match self {
             Self::New => t.new,
+            Self::NewWindow => t.new_window,
             Self::Open => t.open,
             Self::OpenAllRecent => t.open_all_recent,
             Self::ClearRecent => t.clear_recent,
@@ -542,7 +545,7 @@ impl Command {
             }
             Self::MoveToOtherView => t.move_to_other_view,
             Self::CloseOtherView => t.close_other_view,
-            Self::MoveToNewInstance => t.move_to_new_instance,
+            Self::MoveToNewWindow => t.move_to_new_window,
             Self::FoldAll => t.fold_all,
             Self::UnfoldAll => t.unfold_all,
             Self::FoldCurrent => t.fold_current,

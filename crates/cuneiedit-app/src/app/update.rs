@@ -7,7 +7,7 @@ use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cuneiedit_update::{Error, NotInstallable, Release, Version};
-use eframe::egui::{self, RichText, ScrollArea, ViewportCommand};
+use eframe::egui::{self, RichText, ScrollArea};
 
 use super::CuneiEditApp;
 use super::dialogs::{Dialog, dialog_buttons, modal_sized};
@@ -332,7 +332,7 @@ impl CuneiEditApp {
             }
             Some(Action::Restart(path)) => {
                 *RELAUNCH.lock().unwrap_or_else(PoisonError::into_inner) = Some(path);
-                ctx.send_viewport_cmd(ViewportCommand::Close);
+                self.quit(ctx);
                 None
             }
             Some(Action::Close) => None,

@@ -190,7 +190,7 @@ impl CuneiEditApp {
             Command::CloseFolder => self.settings.workspace.is_some(),
             Command::MoveToOtherView => self.tabs.len() > 1 && !comparing,
             Command::CloseOtherView => self.second_view.is_some(),
-            Command::MoveToNewInstance => has_path && !tab.doc.is_modified(),
+            Command::MoveToNewWindow => self.tabs.len() > 1 || !tab.is_pristine(),
             Command::FoldAll
             | Command::UnfoldAll
             | Command::FoldCurrent
@@ -422,6 +422,7 @@ impl CuneiEditApp {
             ui,
             &[
                 Command::New,
+                Command::NewWindow,
                 Command::Open,
                 Command::Reveal,
                 Command::Reload,
@@ -577,7 +578,7 @@ impl CuneiEditApp {
                     Command::CopyPath(PathPart::Directory),
                 ],
                 &[Command::ToggleReadOnly, Command::TogglePin],
-                &[Command::MoveToOtherView, Command::MoveToNewInstance],
+                &[Command::MoveToOtherView, Command::MoveToNewWindow],
             ],
         );
         ui.menu_button(t.tab_color, |ui| tab_colors(ui, &m));
@@ -958,7 +959,7 @@ fn view_menu(ui: &mut Ui, m: &Menu<'_>) {
             Command::ToggleSplit,
             Command::MoveToOtherView,
             Command::CloseOtherView,
-            Command::MoveToNewInstance,
+            Command::MoveToNewWindow,
             Command::ToggleMonitoring,
         ],
     );
