@@ -152,7 +152,7 @@ cargo clippy --all-targets
 cargo fmt --all
 (cd fuzz && cargo +nightly fuzz run open -- -max_total_time=60)   # fuzz one target (nightly)
 ./packaging/macos/build-dmg.sh         # .app bundle and .dmg in target/dmg
-git tag -a v0.3.0 -m "Release notes" && git push origin v0.3.0   # signed release via CI
+git tag -a v0.3.1 -m "Release notes" && git push origin v0.3.1   # signed release via CI
 ```
 
 - Open `cuneiedit.code-workspace` in VS Code: recommended extensions, clippy on save, tasks for
@@ -260,19 +260,19 @@ The feature checklist (menu by menu, with status and waves) is
 Keep this section up to date at the end of every working session, so work can continue
 seamlessly from here.
 
-**State (2026-11-09):** version 0.3.0 (beta) is the first release under the name CuneiEdit
+**State (2026-11-10):** version 0.3.0 (beta) was the first release under the name CuneiEdit
 (DMG, macOS ZIP, Windows EXE and ZIP, signed `update.txt`): all features of
 `docs/features.md` waves 1–3, 60 languages, Unicode printing, Windows print dialog,
 large-file performance, signed updates, fuzzing, hardened runtime. CI is green on macOS,
 Windows and Linux. Earlier releases were removed; there is no update path from them.
 Private vulnerability reporting is enabled on GitHub; `SECURITY.md` describes it.
-Since 0.3.0 (not released yet): Windows `.exe` icon, single instance (files from Explorer,
-Finder or the command line go to the running process), several windows ("New Window",
-"Move to New Window"; restored with the session).
+Version 0.3.1 adds the Windows `.exe` icon, single instance (files from Explorer, Finder or
+the command line go to the running process) and several windows ("New Window", "Move to New
+Window"; restored with the session). It is the first update that 0.3.0 can install.
 
 **Next steps, in order:**
 
-1. Test updates for real with a small v0.3.1: on macOS (in `/Applications` as admin and as a
+1. Test the update from 0.3.0 to 0.3.1 for real: on macOS (in `/Applications` as admin and as a
    standard user, and in `~/Applications`) and on a real Windows PC (user folder and
    `C:\Program Files` with UAC). Also try CuneiEdit on Windows in general (typing, saving,
    printing with the new print dialog on a real printer) and check the `.exe` icon in

@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-app"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cuneiedit-core",
  "cuneiedit-editor",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "encoding_rs",
  "md-5",
@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-editor"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cuneiedit-core",
  "egui",
@@ -750,7 +750,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-macos"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -760,7 +760,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-update"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "ed25519-compact",
  "sha2",
@@ -768,7 +768,7 @@ dependencies = [
 
 [[package]]
 name = "cuneiedit-windows"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "windows-sys 0.61.2",
 ]
