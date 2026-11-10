@@ -16,6 +16,7 @@ use eframe::egui::{self, FontData, FontDefinitions, FontFamily, ViewportCommand}
 use super::CuneiEditApp;
 use super::dialogs::{Dialog, UnsavedChoice};
 use crate::i18n::{Texts, fill};
+use crate::instance::NEW_INSTANCE;
 use crate::session::{self, Session, SessionTab};
 use crate::settings::{Flag, SaveBackup, config_file};
 use crate::system;
@@ -475,8 +476,11 @@ impl CuneiEditApp {
     }
 
     /// Writes `session.ini` and backups of unsaved documents. Returns whether every
-    /// unsaved document is in a backup.
+    /// unsaved document is in a backup. A separate instance leaves both alone.
     pub(super) fn save_session_state(&mut self) -> bool {
+        if self.separate {
+            return false;
+        }
         let backup = self.settings.get(Flag::Backup);
         let mut session = Session::default();
         let mut complete = backup;
@@ -530,7 +534,7 @@ impl CuneiEditApp {
             .tabs
             .iter()
             .any(|tab| tab.doc.is_modified() && tab.backed_up != Some(tab.doc.revision()));
-        if self.settings.get(Flag::Backup) && outdated {
+        if self.settings.get(Flag::Backup) && outdated && !self.separate {
             self.save_session_state();
         }
     }
@@ -579,6 +583,38 @@ impl CuneiEditApp {
                 &[("name", &name), ("error", &err.to_string())],
             );
             self.error(message);
+        }
+    }
+
+    /// Opens the active tab's file in a separate instance and closes the tab. Only saved
+    /// files can move, so nothing is lost on the way.
+    pub(super) fn move_to_new_instance(&mut self) {
+        let tab = &self.tabs[self.active];
+        let Some(path) = tab.doc.path().map(Path::to_path_buf) else {
+            return;
+        };
+        if tab.doc.is_modified() {
+            return;
+        }
+        let started = std::env::current_exe().and_then(|exe| {
+            std::process::Command::new(exe)
+                .arg(NEW_INSTANCE)
+                .arg(&path)
+                .spawn()
+        });
+        match started {
+            Ok(mut child) => {
+                // Collects the exit status, so no zombie process is left behind.
+                std::thread::spawn(move || child.wait());
+                self.remove_tab(self.active);
+            }
+            Err(err) => {
+                let message = fill(
+                    self.texts().new_instance_failed,
+                    &[("error", &err.to_string())],
+                );
+                self.error(message);
+            }
         }
     }
 

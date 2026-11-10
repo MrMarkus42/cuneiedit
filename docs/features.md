@@ -22,6 +22,7 @@ Alles ist eigenständig umgesetzt (Clean-Room, siehe `CONTRIBUTING.md`).
 | In den Papierkorb legen | ✅ | eigene Umsetzung ohne Abhängigkeit: macOS `~/.Trash`, Linux freedesktop-Papierkorb; Windows fehlt (braucht Shell-API, also `unsafe` oder eine Abhängigkeit – Entscheidung offen); „Zurücklegen“ im Finder geht nicht |
 | Im Finder zeigen | ✅ | erlaubte Ausnahme: fester Aufruf `/usr/bin/open -R` |
 | Öffnen aus dem Finder („Öffnen mit“, Doppelklick, aufs Dock-Symbol ziehen) | ✅ | macOS, über `cuneiedit-macos`; als Alternative, nicht als Standard-Programm registriert |
+| Nur eine Instanz | ✅ | Dateien aus Explorer, Finder oder Kommandozeile öffnen sich im laufenden Fenster; lokal und nur für den Benutzer (Unix-Socket im privaten Ordner, unter Windows Named Pipe) |
 | Native Mac-Menüleiste | ✅ | Programm-, Ablage-, Bearbeiten-, Darstellungs-, Fenster- und Hilfe-Menü mit den wichtigsten Befehlen (`muda`); vollständige Menüs im Fenster |
 | Ordner im Terminal öffnen, in Standard-Programm öffnen | ⚠️ | externer Prozess |
 | Ordner als Arbeitsbereich (Dateibaum-Seitenleiste) | ✅ | liest Ordner erst beim Aufklappen, folgt keinen symbolischen Links auf Ordner |
@@ -156,6 +157,7 @@ Alles ist eigenständig umgesetzt (Clean-Room, siehe `CONTRIBUTING.md`).
 | Funktion | Status | Anmerkung |
 |---|---|---|
 | Schließen-Varianten, Speichern, Umbenennen, Neu laden, Im Finder zeigen, Pfad kopieren, Schreibschutz, Anheften, Farbe, Papierkorb | ✅ | |
+| In andere Ansicht / in neues Fenster verschieben | ✅ | neues Fenster = eigene Instanz, nur für gespeicherte Dateien; ohne Sitzung und Sicherungen |
 | Tabs per Ziehen umsortieren | ✅ | |
 
 ## Welle 3 (erledigt bis auf zwei Punkte)

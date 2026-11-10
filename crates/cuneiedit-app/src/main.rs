@@ -5,6 +5,9 @@ mod app_icon;
 mod compare;
 mod find;
 mod i18n;
+#[cfg(test)]
+mod icon_files;
+mod instance;
 mod languages;
 mod macros;
 mod session;
@@ -28,7 +31,25 @@ fn main() -> eframe::Result {
         std::process::exit(code);
     }
     cuneiedit_update::cleanup();
-    let files: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let mut separate = false;
+    let files: Vec<PathBuf> = std::env::args_os()
+        .skip(1)
+        .filter(|arg| {
+            let flag = arg == instance::NEW_INSTANCE;
+            separate |= flag;
+            !flag
+        })
+        .map(PathBuf::from)
+        .collect();
+    let listener = if separate {
+        None
+    } else {
+        match instance::start(&files) {
+            instance::Start::Forwarded => return Ok(()),
+            instance::Start::Main(listener) => Some(listener),
+            instance::Start::Alone => None,
+        }
+    };
 
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
@@ -60,7 +81,11 @@ fn main() -> eframe::Result {
     let mut app = eframe::create_native(
         "CuneiEdit",
         options,
-        Box::new(|cc| Ok(Box::new(app::CuneiEditApp::new(&cc.egui_ctx, files)))),
+        Box::new(move |cc| {
+            let incoming = listener.map(|listener| listener.spawn(cc.egui_ctx.clone()));
+            let app = app::CuneiEditApp::new(&cc.egui_ctx, files, separate, incoming);
+            Ok(Box::new(app))
+        }),
         &event_loop,
     );
     event_loop.run_app(&mut app)?;

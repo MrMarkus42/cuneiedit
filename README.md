@@ -43,7 +43,9 @@ writing; the icon shows three of them.
 ## Features
 
 **Files and sessions**
-- Tabs: pin, color, reorder by dragging, many ways to close, reopen closed tabs
+- Tabs: pin, color, reorder by dragging, many ways to close, reopen closed tabs, move a tab to
+  a new window
+- Files opened from Explorer, Finder or the command line go to the running window
 - Open, save, save all, save a copy, rename, reload, move to trash, show in Finder/Explorer
 - Restores the last session **including unsaved changes**; named session files
 - Notices files changed or deleted by other programs; follow mode (`tail -f`)
@@ -108,6 +110,9 @@ it update itself.
 
 Either download `CuneiEdit-<version>-windows-x64.zip`, unpack it to a folder of your choice and
 start `CuneiEdit.exe`, or download `CuneiEdit-<version>-windows-x64.exe` and start it directly.
+Keep it in a fixed place, e.g. `%LOCALAPPDATA%\Programs\CuneiEdit` (not in Downloads): updates
+replace the executable where it is, so "Open with" and default programs keep working, whatever
+the file is called.
 
 Windows SmartScreen may warn about an unknown publisher (the executable is not code-signed
 yet): click **More info → Run anyway**. CuneiEdit can live in a user folder or in

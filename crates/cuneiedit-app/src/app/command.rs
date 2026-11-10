@@ -160,6 +160,8 @@ pub enum Command {
     SetTabColor(Option<usize>),
     MoveToOtherView,
     CloseOtherView,
+    /// Opens the saved file of the tab in a separate instance and closes the tab.
+    MoveToNewInstance,
     FoldAll,
     UnfoldAll,
     FoldCurrent,
@@ -368,6 +370,7 @@ pub const CUSTOMIZABLE: &[Command] = &[
     Command::HideLines,
     Command::ToggleSplit,
     Command::MoveToOtherView,
+    Command::MoveToNewInstance,
     Command::Summary,
     Command::SetCompareFirst,
     Command::CompareWithSaved,
@@ -539,6 +542,7 @@ impl Command {
             }
             Self::MoveToOtherView => t.move_to_other_view,
             Self::CloseOtherView => t.close_other_view,
+            Self::MoveToNewInstance => t.move_to_new_instance,
             Self::FoldAll => t.fold_all,
             Self::UnfoldAll => t.unfold_all,
             Self::FoldCurrent => t.fold_current,

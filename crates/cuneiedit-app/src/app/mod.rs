@@ -31,6 +31,7 @@ pub mod update;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use cuneiedit_core::Document;
@@ -108,10 +109,19 @@ pub struct CuneiEditApp {
     #[cfg(target_os = "macos")]
     mac_menu: Option<mac_menu::MacMenu>,
     updater: update::Updater,
+    /// Started with "move to new instance": no session, no backups.
+    separate: bool,
+    /// Files handed over by later starts.
+    incoming: Option<Receiver<Vec<PathBuf>>>,
 }
 
 impl CuneiEditApp {
-    pub fn new(ctx: &egui::Context, files: Vec<PathBuf>) -> Self {
+    pub fn new(
+        ctx: &egui::Context,
+        files: Vec<PathBuf>,
+        separate: bool,
+        incoming: Option<Receiver<Vec<PathBuf>>>,
+    ) -> Self {
         let settings = Settings::load();
         ctx.set_theme(settings.theme);
         // The editor zooms its own font instead of the whole interface.
@@ -161,8 +171,12 @@ impl CuneiEditApp {
             #[cfg(target_os = "macos")]
             mac_menu: None,
             updater: update::Updater::default(),
+            separate,
+            incoming,
         };
-        app.restore_session();
+        if !separate {
+            app.restore_session();
+        }
         if app.tabs.is_empty() {
             app.new_tab();
         }
@@ -332,6 +346,19 @@ impl CuneiEditApp {
         });
         for path in dropped {
             self.open_path(&path);
+        }
+
+        let handed_over: Vec<Vec<PathBuf>> = self
+            .incoming
+            .as_ref()
+            .map(|incoming| incoming.try_iter().collect())
+            .unwrap_or_default();
+        if !handed_over.is_empty() {
+            for path in handed_over.into_iter().flatten() {
+                self.open_path(&path);
+            }
+            ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(ViewportCommand::Focus);
         }
 
         let tab = &self.tabs[self.active];

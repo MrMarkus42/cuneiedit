@@ -207,6 +207,7 @@ impl CuneiEditApp {
                 }
             }
             Command::CloseOtherView => self.second_view = None,
+            Command::MoveToNewInstance => self.move_to_new_instance(),
             Command::DistractionFree => {
                 self.distraction_free ^= true;
                 self.post_it = false;

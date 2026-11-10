@@ -17,9 +17,9 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
 | `crates/cuneiedit-core` | Document model: rope buffer, encodings (incl. own DOS code page tables), line endings, undo (several edits can form one step: `Document::replace_many`), search (`search.rs`), syntax highlighting incl. user-defined languages (`highlight.rs`), code folding ranges (`fold.rs`), line operations (`ops.rs`), case/whitespace/bracket/tag helpers (`transform.rs`), file comparison and change history (`diff.rs`), symbols/completion/call tips/result lines (`code.rs`), find in files, folder listing and path completion (`files.rs`), HTML/PDF export (`export.rs`) with a TrueType reader for embedding fonts (`font.rs`), checksums (`checksum.rs`) | no UI crates |
 | `crates/cuneiedit-editor` | egui editor widget: layout of visible lines, word wrap, cursor, selection, multiple cursors and column selection, folding, input, syntax colors and `Palette`, match highlights, smart highlighting, whitespace/indent guides/edge line, bookmarks, gutter marks, brackets and tags, auto-close, macro recording, spacer and folded rows (`rows.rs`), read-only mode | core, egui |
 | `crates/cuneiedit-macos` | macOS only: files opened from Finder/Dock and quit requests, by adding two methods to winit's application delegate at runtime; the print dialog (PDFKit) | objc2 (`unsafe` allowed) |
-| `crates/cuneiedit-windows` | Windows only: print dialog and printing with GDI | windows-sys (`unsafe` allowed) |
+| `crates/cuneiedit-windows` | Windows only: print dialog and printing with GDI; the named pipe for single instance (`instance.rs`) | windows-sys (`unsafe` allowed) |
 | `crates/cuneiedit-update` | Updates: signed manifest (`manifest.rs`), check and download via the system's `curl`, installation per platform (`install.rs`); the release tool `cuneiedit-release` (key generation, manifest, signing; not shipped) | ed25519-compact, sha2 |
-| `crates/cuneiedit-app` | Window (`app/`, see its module doc), find bar (`find.rs`), comparison state (`compare.rs`), settings (`settings.rs`), session and backups (`session.rs`), trash and "show in Finder" (`system.rs`), color themes (`themes.rs`), saved macros (`macros.rs`), user languages (`languages.rs`), UI texts (`i18n.rs`), app icon (`app_icon.rs`) | everything |
+| `crates/cuneiedit-app` | Window (`app/`, see its module doc), find bar (`find.rs`), comparison state (`compare.rs`), settings (`settings.rs`), session and backups (`session.rs`), single instance (`instance.rs`), trash and "show in Finder" (`system.rs`), color themes (`themes.rs`), saved macros (`macros.rs`), user languages (`languages.rs`), UI texts (`i18n.rs`), app icon (`app_icon.rs`; `icon_files.rs` writes PNG and Windows `.res` files for `build.rs` and the example) | everything |
 
 - In `app/`, every command is a `Command` variant with label and default shortcut in
   `command.rs`; menus are built from these, `run.rs` executes them. New feature = variant +
@@ -57,7 +57,7 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
   each with its own lints and a `// SAFETY:` comment on every block: `crates/cuneiedit-macos`
   (2026-11-06) for the Objective-C calls macOS requires, and `crates/cuneiedit-windows`
   (2026-11-09) for the Win32 print dialog and GDI printing (`windows-sys`, Microsoft's raw
-  bindings, already used by winit).
+  bindings, already used by winit), and since 2026-11-10 the single-instance named pipe.
 - `cargo fmt`, `cargo clippy --all-targets` (no warnings) and `cargo test` must pass.
 - Keep comments short; only explain what the code cannot.
 
@@ -79,6 +79,15 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
   `.exe` (removed on the next start) or, in protected folders, runs the installed `.exe`
   elevated (UAC) via PowerShell `Start-Process -Verb RunAs` as a helper that only replaces
   itself and re-checks the hash. Linux only shows the release page.
+  Approved exception (2026-11-10, `instance.rs`): single instance. A second start hands its
+  file paths to the running instance and exits; nothing else is accepted. The channel is
+  local only and limited to the user: a Unix domain socket in `instance/` (mode 0700) in the
+  config directory, or on Windows a named pipe whose access list allows only the user's SID,
+  that rejects remote clients and whose server process the client checks to run as the same
+  user. Messages are limited to 1 MB and 1000 absolute paths and parsed defensively (tested);
+  the paths are opened like files dropped on the window. "Move to New Window" starts the own
+  executable (`current_exe`) with `--new-instance` and the path, no shell; such an instance
+  neither receives files nor reads or writes the session and backups.
 - Before adding a dependency, check: maintenance and popularity, license, `unsafe` usage,
   `build.rs` and proc macros (they run at build time). Prefer the standard library or a few
   lines of own code over small crates.
@@ -153,7 +162,8 @@ git tag -a v0.3.0 -m "Release notes" && git push origin v0.3.0   # signed releas
 
 - Icons are drawn in code, no image files: toolbar icons in `app/toolbar.rs` (16 × 16 grid),
   the app icon in `app_icon.rs` (window icon at runtime; `examples/app_icon.rs` writes the
-  PNGs for the `.icns` when packaging). The packaging script runs Apple's build tools
+  PNGs for the `.icns` when packaging; on Windows `build.rs` embeds it into the `.exe` as a
+  resource, which Explorer and the taskbar show). The packaging script runs Apple's build tools
   (`iconutil`, `codesign`, `hdiutil`) at build time only.
 
 ## Decisions
@@ -203,6 +213,10 @@ git tag -a v0.3.0 -m "Release notes" && git push origin v0.3.0   # signed releas
   and the second view are not restored with the session.
 - With several cursors, each keystroke is its own undo step; auto-close is off.
 - User languages are leaked once per definition (a few KB) to keep specs `'static`.
+- A separate instance ("Move to New Window") shares `settings.ini` with the main one; the
+  last one to save its settings wins. Its unsaved documents are asked about on quit.
+- The Windows `.exe` icon resource and the named pipe were only checked by building for
+  Windows; the single instance was tested on macOS.
 - Not notarized yet (needs the Apple Developer Program and the secrets above): Gatekeeper warns
   on the first start. Settings and session files (`cuneiedit-app`) are not fuzzed yet.
 
@@ -249,13 +263,17 @@ seamlessly from here.
 large-file performance, signed updates, fuzzing, hardened runtime. CI is green on macOS,
 Windows and Linux. Earlier releases were removed; there is no update path from them.
 Private vulnerability reporting is enabled on GitHub; `SECURITY.md` describes it.
+Since 0.3.0 (not released yet): Windows `.exe` icon, single instance (files from Explorer,
+Finder or the command line go to the running window) and "Move to New Window" for tabs.
 
 **Next steps, in order:**
 
 1. Test updates for real with a small v0.3.1: on macOS (in `/Applications` as admin and as a
    standard user, and in `~/Applications`) and on a real Windows PC (user folder and
    `C:\Program Files` with UAC). Also try CuneiEdit on Windows in general (typing, saving,
-   printing with the new print dialog on a real printer).
+   printing with the new print dialog on a real printer) and check the `.exe` icon in
+   Explorer and the taskbar, double clicks on files while CuneiEdit runs, and "Move to New
+   Window".
 2. Look at the things never checked visually: print dialogs, new highlighting colors, update
    dialog and first-start question.
 3. Check the trademark before announcing CuneiEdit widely.
