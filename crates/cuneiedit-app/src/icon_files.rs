@@ -110,6 +110,28 @@ pub fn windows_res(images: &[(u32, Vec<u8>)]) -> Vec<u8> {
     out
 }
 
+/// An icon file (`.ico`) with one PNG image per size.
+pub fn ico(images: &[(u32, Vec<u8>)]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for value in [0u16, 1, images.len() as u16] {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    let mut offset = 6 + 16 * images.len();
+    for (size, image) in images {
+        let side = if *size >= 256 { 0 } else { *size as u8 };
+        out.extend_from_slice(&[side, side, 0, 0]);
+        out.extend_from_slice(&1u16.to_le_bytes());
+        out.extend_from_slice(&32u16.to_le_bytes());
+        out.extend_from_slice(&(image.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(offset as u32).to_le_bytes());
+        offset += image.len();
+    }
+    for (_, image) in images {
+        out.extend_from_slice(image);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +166,15 @@ mod tests {
         assert_eq!(u16_at(entries + 4), 2, "image count");
         assert_eq!(res[entries + 6 + 14], 0, "256 is written as 0");
         assert_eq!(res.len() % 4, 0);
+    }
+
+    #[test]
+    fn writes_icon_files() {
+        let ico = ico(&[(16, vec![1, 2, 3]), (256, vec![4; 8])]);
+        assert_eq!(&ico[..6], &[0, 0, 1, 0, 2, 0]);
+        assert_eq!(ico[6 + 16], 0, "256 is written as 0");
+        let offset = u32::from_le_bytes(ico[6 + 16 + 12..6 + 16 + 16].try_into().unwrap());
+        assert_eq!(offset, 6 + 32 + 3);
+        assert_eq!(ico.len(), 6 + 32 + 3 + 8);
     }
 }

@@ -429,7 +429,7 @@ impl CuneiEditApp {
         }
 
         let tab = &self.tabs[self.active];
-        let marker = if tab.doc.is_modified() { "● " } else { "" };
+        let marker = if tab.doc.is_modified() { "⏺ " } else { "" };
         let title = format!("{marker}{} – CuneiEdit", tab.title(self.texts()));
         if title != self.window_title {
             ctx.send_viewport_cmd(ViewportCommand::Title(title.clone()));

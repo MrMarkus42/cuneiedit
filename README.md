@@ -108,9 +108,16 @@ it update itself.
 
 ### Windows (64-bit, Windows 10 or later)
 
-Either download `CuneiEdit-<version>-windows-x64.zip`, unpack it to a folder of your choice and
-start `CuneiEdit.exe`, or download `CuneiEdit-<version>-windows-x64.exe` and start it directly.
-Keep it in a fixed place, e.g. `%LOCALAPPDATA%\Programs\CuneiEdit` (not in Downloads): updates
+The easiest way is the installer `CuneiEdit-<version>-windows-x64-setup.exe`: it needs no
+administrator rights, adds CuneiEdit to the start menu and lets you choose the file types
+CuneiEdit should open (text, configuration, data, source code; scripts and web pages are not
+preselected). You can change the choice later under **All Settings → File Types**. Windows
+does not let programs take over a type for which you already chose another app; for those, use
+**Windows Default Apps…** there.
+
+Without installing, download `CuneiEdit-<version>-windows-x64.zip`, unpack it to a folder of
+your choice and start `CuneiEdit.exe`, or download `CuneiEdit-<version>-windows-x64.exe` and
+start it directly. Keep it in a fixed place, e.g. `%LOCALAPPDATA%\Programs\CuneiEdit` (not in Downloads): updates
 replace the executable where it is, so "Open with" and default programs keep working, whatever
 the file is called.
 

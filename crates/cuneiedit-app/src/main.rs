@@ -3,6 +3,7 @@
 mod app;
 mod app_icon;
 mod compare;
+mod file_types;
 mod find;
 mod i18n;
 #[cfg(test)]
@@ -25,6 +26,10 @@ use winit::event_loop::EventLoop;
 fn main() -> eframe::Result {
     // Started elevated by an update on Windows: replace the executable and exit.
     if let Some(code) = cuneiedit_update::apply_from_args() {
+        std::process::exit(code);
+    }
+    // Run by the installer: register or unregister the file types and exit.
+    if let Some(code) = file_types::run_from_args() {
         std::process::exit(code);
     }
     cuneiedit_update::cleanup();

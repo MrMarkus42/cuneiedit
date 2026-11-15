@@ -1,10 +1,11 @@
 //! Printing on Windows: the system print dialog (printer, pages, copies) and printing text
-//! with GDI; and the named pipe of [`instance`]. These Win32 calls need a few lines of
-//! `unsafe`.
+//! with GDI; the named pipe of [`instance`]; and the file type registration of
+//! [`file_types`]. These Win32 calls need a few lines of `unsafe`.
 //!
 //! On other platforms this crate is empty.
 #![cfg(windows)]
 
+pub mod file_types;
 pub mod instance;
 
 use std::ffi::OsStr;

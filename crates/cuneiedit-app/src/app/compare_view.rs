@@ -90,14 +90,14 @@ impl CuneiEditApp {
         let mut command = None;
         ui.horizontal(|ui| {
             if ui
-                .button("↑")
+                .button("⏶")
                 .on_hover_text(texts.previous_difference)
                 .clicked()
             {
                 command = Some(Command::PreviousDifference);
             }
             if ui
-                .button("↓")
+                .button("⏷")
                 .on_hover_text(texts.next_difference)
                 .clicked()
             {
@@ -274,7 +274,7 @@ fn show_pane(
     ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            let marker = if pane.doc.is_modified() { " ●" } else { "" };
+            let marker = if pane.doc.is_modified() { " ⏺" } else { "" };
             ui.strong(format!("{}{marker}", pane.title));
         });
         let editor = Editor::new(

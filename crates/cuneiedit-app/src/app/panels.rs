@@ -305,7 +305,7 @@ impl CuneiEditApp {
                     ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
                         for (index, tab) in self.tabs.iter().enumerate() {
-                            let marker = if tab.doc.is_modified() { " ●" } else { "" };
+                            let marker = if tab.doc.is_modified() { " ⏺" } else { "" };
                             let label = format!("{}{marker}", tab.title(texts));
                             let response = ui.selectable_label(index == self.active, label);
                             if let Some(path) = tab.doc.path() {

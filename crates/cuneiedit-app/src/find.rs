@@ -216,7 +216,7 @@ impl FindBar {
             }
             if self.query.regex
                 && ui
-                    .toggle_value(&mut self.query.dot_matches_newline, ".↵")
+                    .toggle_value(&mut self.query.dot_matches_newline, ".↩")
                     .on_hover_text(texts.dot_newline)
                     .changed()
             {
@@ -232,10 +232,10 @@ impl FindBar {
             }
             ui.toggle_value(&mut self.wrap, "⟲")
                 .on_hover_text(texts.wrap_around);
-            if ui.button("↑").on_hover_text(texts.find_previous).clicked() {
+            if ui.button("⏶").on_hover_text(texts.find_previous).clicked() {
                 set(FindAction::Previous);
             }
-            if ui.button("↓").on_hover_text(texts.find_next).clicked() {
+            if ui.button("⏷").on_hover_text(texts.find_next).clicked() {
                 set(FindAction::Next);
             }
             self.status_label(ui, texts, selection);

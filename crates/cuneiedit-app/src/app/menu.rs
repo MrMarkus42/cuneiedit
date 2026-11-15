@@ -499,7 +499,7 @@ impl CuneiEditApp {
                         title.push_str(" 🔒");
                     }
                     if tab.doc.is_modified() {
-                        title.push_str(" ●");
+                        title.push_str(" ⏺");
                     }
                     let response = ui
                         .selectable_label(index == self.active, title)
@@ -607,7 +607,7 @@ impl CuneiEditApp {
                 ui.separator();
                 ui.colored_label(
                     Color32::from_rgb(220, 50, 50),
-                    format!("● {}", texts.recording),
+                    format!("⏺ {}", texts.recording),
                 );
             }
             if tab.editor.has_multiple_selections() {

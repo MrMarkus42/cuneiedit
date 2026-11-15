@@ -496,6 +496,22 @@ texts! {
     update_off: "Don't look for updates", "Nicht nach Updates suchen";
     update_notify: "Look daily and ask before installing", "Täglich suchen und vor dem Installieren fragen";
     update_automatic: "Look daily and install automatically", "Täglich suchen und automatisch installieren";
+    tab_file_types: "File Types", "Dateitypen";
+    file_types_title: "Open these file types with CuneiEdit", "Diese Dateitypen mit CuneiEdit öffnen";
+    file_group_text: "Text and documentation", "Text und Dokumentation";
+    file_group_config: "Configuration", "Konfiguration";
+    file_group_data: "Data", "Daten";
+    file_group_code: "Source code", "Quellcode";
+    file_group_web: "Stylesheets and components", "Stylesheets und Komponenten";
+    file_group_pages: "Web pages and images (usually opened in the browser)", "Webseiten und Bilder (öffnen sonst im Browser)";
+    file_group_scripts: "Scripts (a double click runs them otherwise)", "Skripte (ein Doppelklick führt sie sonst aus)";
+    file_type_description: "Text file", "Textdatei";
+    file_types_hint: "Checked types open in CuneiEdit with a double click, unless another app was chosen as default in Windows. Bold: CuneiEdit is the default now.", "Angehakte Typen öffnen per Doppelklick in CuneiEdit, außer in Windows wurde eine andere App als Standard gewählt. Fett: CuneiEdit ist jetzt Standard.";
+    file_types_recommended: "Recommended", "Empfohlen";
+    file_types_none: "None", "Keine";
+    file_types_default_apps: "Windows Default Apps…", "Windows-Standard-Apps…";
+    /// `{error}` is the system error.
+    file_types_failed: "The file types could not be registered: {error}", "Die Dateitypen konnten nicht registriert werden: {error}";
     update_checking: "Looking for a new version…", "Suche nach einer neuen Version …";
     /// `{version}` is the installed version.
     update_current: "CuneiEdit {version} is the latest version.", "CuneiEdit {version} ist die neueste Version.";

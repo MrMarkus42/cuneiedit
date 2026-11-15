@@ -130,6 +130,7 @@ Alles ist eigenständig umgesetzt (Clean-Room, siehe `CONTRIBUTING.md`).
 | Sicherung beim Speichern (Kopie mit Zeitstempel) | ✅ | einfach (`name.bak`) oder ausführlich (mit Datum im Einstellungsordner) |
 | Alle Vorkommen des markierten Worts hervorheben, passende HTML-Tags | ✅ | im sichtbaren Bereich; Tags in HTML/XML |
 | Updates | ✅ | Frage beim ersten Start, Einstellung (aus / benachrichtigen / automatisch), „Nach Updates suchen …“; signiert (Ed25519) von GitHub; macOS und Windows installieren selbst (Admin-Passwort bzw. UAC wenn nötig), Linux zeigt die Release-Seite |
+| Windows: Installer und Dateitypen | ✅ | Installer (Inno Setup, ohne Admin-Rechte, Startmenü, Deinstallation) mit Auswahl der Dateitypen nach Gruppen; dieselbe Auswahl unter „Alle Einstellungen → Dateitypen“; nur für den Benutzer (HKCU); Standard wird es nur, wo in Windows keine andere App gewählt ist, sonst über „Windows-Standard-Apps…“ |
 | Klickbare Links, Internetsuche, Plugins | ⚠️ | |
 
 ## Werkzeuge

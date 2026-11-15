@@ -772,3 +772,26 @@ fn restore_document(saved: &SessionTab) -> Option<Document> {
     }
     Some(doc)
 }
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui::epaint::text::{Fonts, TextOptions};
+    use eframe::egui::{FontDefinitions, FontFamily};
+
+    /// The symbols the interface draws on buttons and as markers must be in the built-in
+    /// fonts; otherwise they show as empty boxes.
+    #[test]
+    fn built_in_fonts_have_the_interface_symbols() {
+        let mut fonts = Fonts::new(TextOptions::default(), FontDefinitions::default());
+        let mut view = fonts.with_pixels_per_point(1.0);
+        let characters = view.characters(&FontFamily::Proportional).clone();
+        let missing: String = "✏🗙↺⟲⟳⏶⏷⏺↩⌘×…“”"
+            .chars()
+            .filter(|c| !characters.contains_key(c))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "missing in the built-in fonts: {missing}"
+        );
+    }
+}

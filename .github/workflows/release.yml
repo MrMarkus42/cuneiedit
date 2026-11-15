@@ -84,11 +84,23 @@ jobs:
           Copy-Item target/release/cuneiedit.exe zip/CuneiEdit/CuneiEdit.exe
           Copy-Item LICENSE-MIT, LICENSE-APACHE, README.md zip/CuneiEdit/
           Compress-Archive -Path zip/CuneiEdit -DestinationPath "CuneiEdit-$v-windows-x64.zip"
+      - name: Installer
+        shell: pwsh
+        run: |
+          $v = $env:GITHUB_REF_NAME.Substring(1)
+          cargo run --release --locked -q -p cuneiedit-app --example app_icon -- target/installer/CuneiEdit.ico
+          # Inno Setup is part of the runner image; nothing is downloaded.
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup 6 is missing on the runner" }
+          & $iscc /Q "/DAppVersion=$v" packaging\windows\cuneiedit.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "target/installer/CuneiEdit-$v-windows-x64-setup.exe" .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
           path: |
             CuneiEdit-*-windows-x64.exe
+            CuneiEdit-*-windows-x64-setup.exe
             CuneiEdit-*-windows-x64.zip
           if-no-files-found: error
 

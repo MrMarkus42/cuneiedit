@@ -17,9 +17,9 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
 | `crates/cuneiedit-core` | Document model: rope buffer, encodings (incl. own DOS code page tables), line endings, undo (several edits can form one step: `Document::replace_many`), search (`search.rs`), syntax highlighting incl. user-defined languages (`highlight.rs`), code folding ranges (`fold.rs`), line operations (`ops.rs`), case/whitespace/bracket/tag helpers (`transform.rs`), file comparison and change history (`diff.rs`), symbols/completion/call tips/result lines (`code.rs`), find in files, folder listing and path completion (`files.rs`), HTML/PDF export (`export.rs`) with a TrueType reader for embedding fonts (`font.rs`), checksums (`checksum.rs`) | no UI crates |
 | `crates/cuneiedit-editor` | egui editor widget: layout of visible lines, word wrap, cursor, selection, multiple cursors and column selection, folding, input, syntax colors and `Palette`, match highlights, smart highlighting, whitespace/indent guides/edge line, bookmarks, gutter marks, brackets and tags, auto-close, macro recording, spacer and folded rows (`rows.rs`), read-only mode | core, egui |
 | `crates/cuneiedit-macos` | macOS only: files opened from Finder/Dock and quit requests, by adding two methods to winit's application delegate at runtime; the print dialog (PDFKit) | objc2 (`unsafe` allowed) |
-| `crates/cuneiedit-windows` | Windows only: print dialog and printing with GDI; the named pipe for single instance (`instance.rs`) | windows-sys (`unsafe` allowed) |
+| `crates/cuneiedit-windows` | Windows only: print dialog and printing with GDI; the named pipe for single instance (`instance.rs`); file type registration in the registry (`file_types.rs`) | windows-sys (`unsafe` allowed) |
 | `crates/cuneiedit-update` | Updates: signed manifest (`manifest.rs`), check and download via the system's `curl`, installation per platform (`install.rs`); the release tool `cuneiedit-release` (key generation, manifest, signing; not shipped) | ed25519-compact, sha2 |
-| `crates/cuneiedit-app` | Window (`app/`, see its module doc), find bar (`find.rs`), comparison state (`compare.rs`), settings (`settings.rs`), session and backups (`session.rs`), single instance (`instance.rs`), trash and "show in Finder" (`system.rs`), color themes (`themes.rs`), saved macros (`macros.rs`), user languages (`languages.rs`), UI texts (`i18n.rs`), app icon (`app_icon.rs`; `icon_files.rs` writes PNG and Windows `.res` files for `build.rs` and the example) | everything |
+| `crates/cuneiedit-app` | Window (`app/`, see its module doc), find bar (`find.rs`), comparison state (`compare.rs`), settings (`settings.rs`), session and backups (`session.rs`), single instance (`instance.rs`), trash and "show in Finder" (`system.rs`), file types offered on Windows (`file_types.rs`; the installer's choices are generated from it), color themes (`themes.rs`), saved macros (`macros.rs`), user languages (`languages.rs`), UI texts (`i18n.rs`), app icon (`app_icon.rs`; `icon_files.rs` writes PNG and Windows `.res` files for `build.rs` and the example) | everything |
 
 - In `app/`, every command is a `Command` variant with label and default shortcut in
   `command.rs`; menus are built from these, `run.rs` executes them. New feature = variant +
@@ -57,7 +57,8 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
   each with its own lints and a `// SAFETY:` comment on every block: `crates/cuneiedit-macos`
   (2026-11-06) for the Objective-C calls macOS requires, and `crates/cuneiedit-windows`
   (2026-11-09) for the Win32 print dialog and GDI printing (`windows-sys`, Microsoft's raw
-  bindings, already used by winit), and since 2026-11-10 the single-instance named pipe.
+  bindings, already used by winit), and since 2026-11-10 the single-instance named pipe and
+  since 2026-11-15 the file type registration in the registry.
 - `cargo fmt`, `cargo clippy --all-targets` (no warnings) and `cargo test` must pass.
 - Keep comments short; only explain what the code cannot.
 
@@ -87,6 +88,14 @@ full programmer's editor. Primary platform is macOS; Windows and Linux follow.
   clients and whose server process the client checks to run as the same user. Messages are
   limited to 1 MB and 1000 absolute paths and parsed defensively (tested); the paths are
   opened like files dropped on the window.
+  Approved exception (2026-11-15, `file_types.rs`): file types on Windows. Only on explicit
+  choice (installer page, or OK in the settings page "File Types"), CuneiEdit writes its
+  ProgID, "Open with" entries, capabilities and, where the user has not chosen a default app in
+  Windows, the per-user default under `HKEY_CURRENT_USER` only (never `HKEY_LOCAL_MACHINE`,
+  never the protected `UserChoice`); an earlier per-user default is kept and restored when a
+  type is deselected. The installer runs `CuneiEdit.exe --register-file-types <ext>…` and
+  `--unregister-file-types` (only known extensions are accepted). "Windows Default Apps…"
+  opens the fixed `ms-settings:` page via `ShellExecuteW`.
 - Before adding a dependency, check: maintenance and popularity, license, `unsafe` usage,
   `build.rs` and proc macros (they run at build time). Prefer the standard library or a few
   lines of own code over small crates.
@@ -159,11 +168,55 @@ git tag -a v0.3.1 -m "Release notes" && git push origin v0.3.1   # signed releas
   running (also with a throwaway test profile), "Check all (before committing)", building the
   DMG and fuzzing, and a debug configuration.
 
+### Development on Windows
+
+1. Install [Git for Windows](https://git-scm.com/download/win), the Visual Studio Build Tools
+   with the workload "Desktop development with C++" (MSVC and Windows SDK), Rust via
+   [rustup](https://rustup.rs) (default toolchain `stable-x86_64-pc-windows-msvc`) and VS Code.
+2. `cargo install --locked cargo-deny cargo-audit`
+3. `git clone https://github.com/MrMarkus42/cuneiedit.git`, then in the clone set
+   `git config user.email` to the GitHub noreply address used for all commits.
+4. Open `cuneiedit.code-workspace` and install the recommended extensions.
+
+Notes:
+
+- `.gitattributes` keeps every text file at LF, also with Git's `core.autocrlf`.
+- The settings folder on Windows is `%APPDATA%\CuneiEdit`, so the test profile sets `APPDATA`
+  instead of `HOME` (the task "Run CuneiEdit (test profile)" and the launch configuration
+  "Debug CuneiEdit (test profile, Windows)" do this). From a terminal:
+  `cmd /c "set APPDATA=%TEMP%\cuneiedit-test-home&& cargo run -p cuneiedit-app"`.
+  A separate profile also gets its own single-instance pipe, so it does not hand files to a
+  running CuneiEdit.
+- Tasks with `&&` run in `cmd.exe` on Windows.
+- `cuneiedit-macos` and the DMG script are macOS only; `cargo clippy` on Windows does not check
+  them (CI does). Fuzzing is easiest on Linux or macOS (CI, or WSL).
+- Releases work the same from Windows: push the tag, CI builds and signs.
+
 - Icons are drawn in code, no image files: toolbar icons in `app/toolbar.rs` (16 × 16 grid),
   the app icon in `app_icon.rs` (window icon at runtime; `examples/app_icon.rs` writes the
   PNGs for the `.icns` when packaging; on Windows `build.rs` embeds it into the `.exe` as a
-  resource, which Explorer and the taskbar show). The packaging script runs Apple's build tools
-  (`iconutil`, `codesign`, `hdiutil`) at build time only.
+  resource, which Explorer and the taskbar show; for the GNU target MinGW's `windres` converts
+  the resource at build time; `-- <file>.ico` writes the installer icon). The packaging
+  script runs Apple's build tools (`iconutil`, `codesign`, `hdiutil`) at build time only.
+
+### Windows installer
+
+`packaging/windows/cuneiedit.iss` (Inno Setup 6) builds
+`target/installer/CuneiEdit-<version>-windows-x64-setup.exe`: per-user install without
+administrator rights (all users on request), start menu entry, optional desktop icon, a page
+with the file types in groups (scripts, web pages and images unchecked), uninstaller. The file
+type page is `packaging/windows/file-types.iss`, generated from
+`crates/cuneiedit-app/src/file_types.rs`; a test fails when it is out of date
+(`CUNEIEDIT_WRITE_ISS=1 cargo test -p cuneiedit-app file_types` rewrites it). The release
+workflow builds it with the Inno Setup of the runner image. Locally, cross-built on Linux:
+
+```sh
+cargo build --release --locked -p cuneiedit-app --target x86_64-pc-windows-gnu   # needs MinGW
+cargo run -q -p cuneiedit-app --example app_icon -- target/installer/CuneiEdit.ico
+```
+
+then on Windows (with the `.exe` and `.ico` in the same places under `target`):
+`ISCC.exe /DAppVersion=0.3.1 /DSourceExe=..\..\target\x86_64-pc-windows-gnu\release\cuneiedit.exe packaging\windows\cuneiedit.iss`.
 
 ## Decisions
 
@@ -220,6 +273,9 @@ git tag -a v0.3.1 -m "Release notes" && git push origin v0.3.1   # signed releas
   tabs cannot be dragged between windows ("Move to New Window" only).
 - The Windows `.exe` icon resource and the named pipe were only checked by building for
   Windows; the single instance and the windows were tested on macOS.
+- The file type registration and the installer were built and checked by the compiler only;
+  not yet run on a real Windows PC. Reinstalling applies the installer's choice again, even if
+  it was changed in the settings since.
 - Not notarized yet (needs the Apple Developer Program and the secrets above): Gatekeeper warns
   on the first start. Settings and session files (`cuneiedit-app`) are not fuzzed yet.
 
@@ -292,5 +348,5 @@ English. Docs and code never mention who or what wrote them. Ask before pushing,
 dependencies and before anything that weakens the security rules; run `cargo fmt`,
 `cargo clippy --all-targets` (zero warnings), `cargo test`, `cargo deny check` and
 `cargo audit` before every commit. Never run test instances of the app with the real
-profile: start them with `HOME=<temp dir>` so `settings.ini` and `session.ini` stay
-untouched. The release signing key is kept by the owner outside the repository.
+profile: start them with `HOME=<temp dir>` (Windows: `APPDATA=<temp dir>`) so `settings.ini`
+and `session.ini` stay untouched. The release signing key is kept by the owner outside the repository.

@@ -1,12 +1,12 @@
-//! The settings dialog (general, editor, backup, shortcuts) and the dialog for user-defined
+//! The settings dialog (general, editor, backup, shortcuts, file types on Windows) and the dialog for user-defined
 //! languages.
 
 use cuneiedit_core::highlight::{self, Language as Syntax, UserLanguage};
 use cuneiedit_core::{Encoding, LineEnding};
 use eframe::egui::os::OperatingSystem;
 use eframe::egui::{
-    self, ComboBox, DragValue, Event, Key, KeyboardShortcut, ScrollArea, TextEdit, ThemePreference,
-    Ui,
+    self, Checkbox, ComboBox, DragValue, Event, Key, KeyboardShortcut, RichText, ScrollArea,
+    TextEdit, ThemePreference, Ui,
 };
 
 use super::CuneiEditApp;
@@ -14,7 +14,8 @@ use super::command::{CUSTOMIZABLE, Command, SHORTCUTS, flag_label};
 use super::dialogs::{Dialog, dialog_buttons, modal_sized};
 use super::files::apply_font;
 use super::keymap::{self, Keymap, command_id};
-use crate::i18n::{Language, Texts};
+use crate::file_types::{self, GROUPS};
+use crate::i18n::{self, Language, Texts};
 use crate::languages;
 use crate::settings::{Flag, SaveBackup, Settings, UpdateMode};
 use crate::themes::THEMES;
@@ -25,6 +26,7 @@ enum Page {
     Editor,
     Backup,
     Shortcuts,
+    FileTypes,
 }
 
 /// The settings being edited; applied with OK.
@@ -37,6 +39,24 @@ pub struct PreferencesForm {
     /// Command waiting for a key press.
     recording: Option<Command>,
     error: Option<String>,
+    /// Loaded when its page is first shown.
+    file_types: Option<FileTypesForm>,
+}
+
+/// The file type registration being edited.
+struct FileTypesForm {
+    state: file_types::State,
+    selected: Vec<bool>,
+}
+
+impl FileTypesForm {
+    fn load() -> Self {
+        let state = file_types::state();
+        Self {
+            selected: state.registered.clone(),
+            state,
+        }
+    }
 }
 
 /// Sets the shortcut text for `command` in `changes` (empty removes the shortcut).
@@ -140,6 +160,7 @@ impl CuneiEditApp {
             filter: String::new(),
             recording: None,
             error: None,
+            file_types: None,
         })));
     }
 
@@ -189,8 +210,12 @@ impl CuneiEditApp {
                     (Page::Editor, texts.tab_editor),
                     (Page::Backup, texts.tab_backup),
                     (Page::Shortcuts, texts.tab_shortcuts),
+                    (Page::FileTypes, texts.tab_file_types),
                 ];
                 for (page, label) in pages {
+                    if page == Page::FileTypes && !file_types::SUPPORTED {
+                        continue;
+                    }
                     ui.selectable_value(&mut form.page, page, label);
                 }
             });
@@ -200,6 +225,7 @@ impl CuneiEditApp {
                 Page::Editor => editor_page(ui, &mut form, texts),
                 Page::Backup => backup_page(ui, &mut form, texts),
                 Page::Shortcuts => shortcuts_page(ui, &mut form, texts),
+                Page::FileTypes => file_types_page(ui, &mut form, texts),
             }
             if let Some(error) = &form.error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
@@ -221,6 +247,13 @@ impl CuneiEditApp {
                         settings.date_format = form.date_format;
                         settings.edge_column = column;
                         self.apply_settings(ctx, settings);
+                        if let Some(types) = form.file_types
+                            && types.selected != types.state.registered
+                            && let Err(err) = file_types::apply(&types.selected, texts)
+                        {
+                            let error = err.to_string();
+                            self.error(i18n::fill(texts.file_types_failed, &[("error", &error)]));
+                        }
                         return None;
                     }
                     _ if !valid_format => form.error = Some(texts.invalid_date_format.to_owned()),
@@ -536,6 +569,55 @@ fn backup_page(ui: &mut Ui, form: &mut PreferencesForm, texts: &Texts) {
     }
 }
 
+fn file_types_page(ui: &mut Ui, form: &mut PreferencesForm, texts: &Texts) {
+    let types = form.file_types.get_or_insert_with(FileTypesForm::load);
+    ui.strong(texts.file_types_title);
+    ui.label(texts.file_types_hint);
+    ui.horizontal(|ui| {
+        if ui.button(texts.file_types_recommended).clicked() {
+            let recommended = file_types::recommended();
+            for (on, extension) in types.selected.iter_mut().zip(file_types::all()) {
+                *on = recommended.contains(&extension);
+            }
+        }
+        if ui.button(texts.file_types_none).clicked() {
+            types.selected.fill(false);
+        }
+        if ui.button(texts.file_types_default_apps).clicked()
+            && let Err(err) = file_types::open_default_apps()
+        {
+            form.error = Some(err.to_string());
+        }
+    });
+    ui.add_space(4.0);
+    ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+        let mut start = 0;
+        for group in GROUPS {
+            let range = start..start + group.extensions.len();
+            start = range.end;
+            let chosen = &mut types.selected[range.clone()];
+            let all_on = chosen.iter().all(|&on| on);
+            let mut on = all_on;
+            let indeterminate = !all_on && chosen.iter().any(|&on| on);
+            let checkbox = Checkbox::new(&mut on, (group.name)(texts)).indeterminate(indeterminate);
+            if ui.add(checkbox).changed() {
+                chosen.fill(on);
+            }
+            ui.indent(group.id, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    for (index, extension) in range.clone().zip(group.extensions) {
+                        let mut label = RichText::new(format!(".{extension}")).monospace();
+                        if types.state.default[index] {
+                            label = label.strong();
+                        }
+                        ui.checkbox(&mut types.selected[index], label);
+                    }
+                });
+            });
+        }
+    });
+}
+
 fn shortcuts_page(ui: &mut Ui, form: &mut PreferencesForm, texts: &Texts) {
     ui.add(
         TextEdit::singleline(&mut form.filter)
@@ -569,13 +651,13 @@ fn shortcuts_page(ui: &mut Ui, form: &mut PreferencesForm, texts: &Texts) {
                         }
                         ui.horizontal(|ui| {
                             if ui
-                                .small_button("✎")
+                                .small_button("✏")
                                 .on_hover_text(texts.press_keys)
                                 .clicked()
                             {
                                 form.recording = Some(command);
                             }
-                            if ui.small_button("✕").on_hover_text(texts.remove).clicked() {
+                            if ui.small_button("🗙").on_hover_text(texts.remove).clicked() {
                                 set_change(&mut form.settings.shortcuts, command, String::new());
                             }
                             if ui.small_button("↺").on_hover_text(texts.reset).clicked() {
