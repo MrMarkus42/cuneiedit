@@ -161,7 +161,7 @@ cargo clippy --all-targets
 cargo fmt --all
 (cd fuzz && cargo +nightly fuzz run open -- -max_total_time=60)   # fuzz one target (nightly)
 ./packaging/macos/build-dmg.sh         # .app bundle and .dmg in target/dmg
-git tag -a v0.3.1 -m "Release notes" && git push origin v0.3.1   # signed release via CI
+git tag -a v0.3.2 -m "Release notes" && git push origin v0.3.2   # signed release via CI
 ```
 
 - Open `cuneiedit.code-workspace` in VS Code: recommended extensions, clippy on save, tasks for
@@ -216,7 +216,7 @@ cargo run -q -p cuneiedit-app --example app_icon -- target/installer/CuneiEdit.i
 ```
 
 then on Windows (with the `.exe` and `.ico` in the same places under `target`):
-`ISCC.exe /DAppVersion=0.3.1 /DSourceExe=..\..\target\x86_64-pc-windows-gnu\release\cuneiedit.exe packaging\windows\cuneiedit.iss`.
+`ISCC.exe /DAppVersion=0.3.2 /DSourceExe=..\..\target\x86_64-pc-windows-gnu\release\cuneiedit.exe packaging\windows\cuneiedit.iss`.
 
 ## Decisions
 
@@ -273,9 +273,9 @@ then on Windows (with the `.exe` and `.ico` in the same places under `target`):
   tabs cannot be dragged between windows ("Move to New Window" only).
 - The Windows `.exe` icon resource and the named pipe were only checked by building for
   Windows; the single instance and the windows were tested on macOS.
-- The file type registration and the installer were built and checked by the compiler only;
-  not yet run on a real Windows PC. Reinstalling applies the installer's choice again, even if
-  it was changed in the settings since.
+- The installer and the file type registration were tried on one Windows 11 PC only.
+  Reinstalling applies the installer's choice again, even if it was changed in the settings
+  since.
 - Not notarized yet (needs the Apple Developer Program and the secrets above): Gatekeeper warns
   on the first start. Settings and session files (`cuneiedit-app`) are not fuzzed yet.
 
@@ -309,14 +309,14 @@ The feature checklist (menu by menu, with status and waves) is
    (waves 1–3 of `docs/features.md` are done except RTL and the Windows trash)
 7. Distribution: ~~icon, `.app` bundle and `.dmg` (ad hoc signed, arm64), hardened runtime,
    notarization in the release workflow~~; Apple Developer ID (to enable notarization),
-   universal binary (Intel), Windows installer and Linux packages
+   ~~Windows installer~~; universal binary (Intel) and Linux packages
 
 ## Current state and next steps
 
 Keep this section up to date at the end of every working session, so work can continue
 seamlessly from here.
 
-**State (2026-11-10):** version 0.3.0 (beta) was the first release under the name CuneiEdit
+**State (2026-11-15):** version 0.3.0 (beta) was the first release under the name CuneiEdit
 (DMG, macOS ZIP, Windows EXE and ZIP, signed `update.txt`): all features of
 `docs/features.md` waves 1–3, 60 languages, Unicode printing, Windows print dialog,
 large-file performance, signed updates, fuzzing, hardened runtime. CI is green on macOS,
@@ -325,10 +325,12 @@ Private vulnerability reporting is enabled on GitHub; `SECURITY.md` describes it
 Version 0.3.1 adds the Windows `.exe` icon, single instance (files from Explorer, Finder or
 the command line go to the running process) and several windows ("New Window", "Move to New
 Window"; restored with the session). It is the first update that 0.3.0 can install.
+Version 0.3.2 adds the Windows installer with the choice of file types (also under All
+Settings → File Types) and bundles the symbol fonts for button icons and markers.
 
 **Next steps, in order:**
 
-1. Test the update from 0.3.0 to 0.3.1 for real: on macOS (in `/Applications` as admin and as a
+1. Test the update from 0.3.1 to 0.3.2 for real: on macOS (in `/Applications` as admin and as a
    standard user, and in `~/Applications`) and on a real Windows PC (user folder and
    `C:\Program Files` with UAC). Also try CuneiEdit on Windows in general (typing, saving,
    printing with the new print dialog on a real printer) and check the `.exe` icon in
@@ -340,7 +342,7 @@ Window"; restored with the session). It is the first update that 0.3.0 can insta
 4. Apple Developer Program: create the Developer ID certificate and set the six `APPLE_*`
    secrets (see Security rules) – then releases are notarized automatically. Optionally a
    Windows code-signing certificate (SmartScreen).
-5. Later: fuzz settings and session parsing, Intel/universal macOS build, Windows installer,
+5. Later: fuzz settings and session parsing, Intel/universal macOS build,
    Linux packages, screenshots for the README, moved-block detection in compare.
 
 **Working conventions:** discuss in German, write code, comments, commits and docs in

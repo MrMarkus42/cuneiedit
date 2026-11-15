@@ -7,7 +7,7 @@
 ; registers the chosen file types through CuneiEdit itself and removes them when uninstalled.
 
 #ifndef AppVersion
-  #error Define AppVersion, e.g. /DAppVersion=0.3.1
+  #error Define AppVersion, e.g. /DAppVersion=0.3.2
 #endif
 #ifndef SourceExe
   #define SourceExe "..\..\target\release\cuneiedit.exe"
