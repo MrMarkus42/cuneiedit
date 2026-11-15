@@ -33,6 +33,7 @@
 			"rust-lang.rust-analyzer",
 			"tamasfe.even-better-toml",
 			"vadimcn.vscode-lldb",
+			"ms-vscode.cpptools",
 			"github.vscode-github-actions"
 		]
 	},
@@ -50,6 +51,16 @@
 				"detail": "Uses a temporary HOME, so the real settings and session stay untouched",
 				"type": "shell",
 				"command": "mkdir -p /tmp/cuneiedit-test-home && HOME=/tmp/cuneiedit-test-home cargo run -p cuneiedit-app",
+				"windows": {
+					"command": "cargo run -p cuneiedit-app",
+					"options": { "env": { "APPDATA": "${env:TEMP}\\cuneiedit-test-home" } }
+				},
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "Build CuneiEdit",
+				"type": "shell",
+				"command": "cargo build -p cuneiedit-app --bin cuneiedit",
 				"problemMatcher": ["$rustc"]
 			},
 			{
@@ -63,6 +74,9 @@
 				"label": "Check all (before committing)",
 				"type": "shell",
 				"command": "cargo fmt --all --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo deny check && cargo audit",
+				"windows": {
+					"options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } }
+				},
 				"group": { "kind": "build", "isDefault": true },
 				"problemMatcher": ["$rustc"]
 			},
@@ -76,6 +90,9 @@
 				"label": "Fuzz (choose target)",
 				"type": "shell",
 				"command": "cd fuzz && cargo +nightly fuzz run ${input:fuzzTarget} -- -max_total_time=120 -max_len=8192 -timeout=10",
+				"windows": {
+					"options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } }
+				},
 				"problemMatcher": []
 			}
 		],
@@ -100,6 +117,17 @@
 					"args": ["build", "-p", "cuneiedit-app", "--bin", "cuneiedit"]
 				},
 				"env": { "HOME": "/tmp/cuneiedit-test-home" },
+				"cwd": "${workspaceFolder}"
+			},
+			{
+				"name": "Debug CuneiEdit (test profile, Windows)",
+				"type": "cppvsdbg",
+				"request": "launch",
+				"preLaunchTask": "Build CuneiEdit",
+				"program": "${workspaceFolder}/target/debug/cuneiedit.exe",
+				"environment": [
+					{ "name": "APPDATA", "value": "${env:TEMP}\\cuneiedit-test-home" }
+				],
 				"cwd": "${workspaceFolder}"
 			}
 		]
