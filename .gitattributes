@@ -1,0 +1,2 @@
+# Keep every text file at LF on all platforms, also with core.autocrlf.
+* text=auto eol=lf
