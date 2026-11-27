@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 eframe.workspace = true
 egui.workspace = true
-jiff = { version = "0.2.39", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+jiff = { version = "1.0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
 cuneiedit-core.workspace = true
 cuneiedit-editor.workspace = true
 cuneiedit-update.workspace = true
